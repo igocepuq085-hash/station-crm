@@ -37,23 +37,25 @@ async def create_report_package(
     db: Session,
     operational_file: UploadFile,
     wagons_file: UploadFile,
-    pdf_file: UploadFile,
+    pdf_file: UploadFile | None = None,
     report_date: date | None = None,
     comment: str | None = None,
 ) -> ReportPackage:
     validate_file_suffix(operational_file, ALLOWED_EXCEL_SUFFIXES)
     validate_file_suffix(wagons_file, ALLOWED_EXCEL_SUFFIXES)
-    validate_file_suffix(pdf_file, ALLOWED_PDF_SUFFIXES)
+    has_pdf = bool(pdf_file and pdf_file.filename)
+    if has_pdf:
+        validate_file_suffix(pdf_file, ALLOWED_PDF_SUFFIXES)
 
     package_dir = new_package_upload_dir()
     operational_path = await save_upload(operational_file, package_dir, "operational")
     wagons_path = await save_upload(wagons_file, package_dir, "wagons")
-    pdf_path = await save_upload(pdf_file, package_dir, "pdf")
+    pdf_path = await save_upload(pdf_file, package_dir, "pdf") if has_pdf else None
 
     detected_report_date = report_date or infer_report_date_from_filename(
         operational_file.filename,
         wagons_file.filename,
-        pdf_file.filename,
+        pdf_file.filename if has_pdf else None,
     )
 
     package = ReportPackage(
@@ -68,8 +70,10 @@ async def create_report_package(
     file_specs = [
         (operational_file, operational_path),
         (wagons_file, wagons_path),
-        (pdf_file, pdf_path),
     ]
+    if has_pdf and pdf_path is not None:
+        file_specs.append((pdf_file, pdf_path))
+
     for upload, path in file_specs:
         db.add(
             ReportFile(

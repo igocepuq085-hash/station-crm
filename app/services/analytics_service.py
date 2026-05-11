@@ -24,7 +24,6 @@ from app.services.product_wagon_service import false_park_coverage_warnings
 REQUIRED_REPORT_TYPES = {
     "operational_excel": "Оперативный Excel",
     "wagons_excel": "Вагонный Excel",
-    "scanned_pdf": "PDF",
 }
 
 

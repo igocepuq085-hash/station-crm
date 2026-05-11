@@ -8,7 +8,7 @@
     <div class="row align-items-end g-4">
       <div class="col-lg-7">
         <p class="eyebrow mb-2">Суточный комплект станции</p>
-        <h1 class="page-title mb-3">Загрузка оперативного, вагонного и PDF-отчета</h1>
+        <h1 class="page-title mb-3">Загрузка оперативного и вагонного отчета</h1>
         <p class="lead text-secondary mb-0">
           После загрузки сервис сохранит файлы, создаст комплект, извлечет листы и строки с ключевыми словами, затем откроет дашборд.
         </p>
@@ -16,7 +16,7 @@
       <div class="col-lg-5">
         <div class="status-strip">
           <span>SQLite MVP</span>
-          <span>Excel + PDF</span>
+          <span>Excel</span>
           <span>Без Alembic</span>
         </div>
       </div>
@@ -36,17 +36,13 @@
         <label for="comment" class="form-label">Комментарий</label>
         <input class="form-control form-control-lg" type="text" id="comment" name="comment" placeholder="Например: сутки, смена, источник комплекта">
       </div>
-      <div class="col-md-4">
+      <div class="col-md-6">
         <label for="operational_file" class="form-label">Оперативный Excel</label>
         <input class="form-control form-control-lg" type="file" id="operational_file" name="operational_file" accept=".xlsx,.xls" required>
       </div>
-      <div class="col-md-4">
+      <div class="col-md-6">
         <label for="wagons_file" class="form-label">Вагонный Excel</label>
         <input class="form-control form-control-lg" type="file" id="wagons_file" name="wagons_file" accept=".xlsx,.xls" required>
-      </div>
-      <div class="col-md-4">
-        <label for="pdf_file" class="form-label">PDF</label>
-        <input class="form-control form-control-lg" type="file" id="pdf_file" name="pdf_file" accept=".pdf" required>
       </div>
 
       <div class="col-12 d-flex justify-content-between align-items-center pt-2">

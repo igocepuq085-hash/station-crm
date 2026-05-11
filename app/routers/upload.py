@@ -26,7 +26,7 @@ async def upload_reports(
     request: Request,
     operational_file: UploadFile = File(...),
     wagons_file: UploadFile = File(...),
-    pdf_file: UploadFile = File(...),
+    pdf_file: UploadFile | None = File(default=None),
     report_date: str = Form(default=""),
     comment: str | None = Form(default=None),
     db: Session = Depends(get_db),
