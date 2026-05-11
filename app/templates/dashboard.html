@@ -37,12 +37,28 @@
     </div>
   {% endif %}
 
-  <div class="section-block ai-extraction-block mb-4">
+  <div class="section-block mb-4">
+    <div class="d-flex flex-wrap justify-content-between gap-3 align-items-center mb-3">
+      <h2 class="section-title mb-0">Сводка за сутки</h2>
+      <span class="text-secondary">Главные показатели без технических деталей</span>
+    </div>
+    <div class="summary-grid">
+      {% for card in summary_cards %}
+        <div class="summary-card">
+          <span>{{ card.label }}</span>
+          <strong>{{ card.value }}</strong>
+          <small>{{ card.hint }}</small>
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="section-block ai-extraction-block ai-extraction-compact mb-4">
     <div class="d-flex flex-wrap justify-content-between gap-3 align-items-start">
       <div>
-        <h2 class="section-title mb-2">AI-разбор отчета</h2>
+        <h2 class="section-title mb-2">Служебный AI-разбор</h2>
         <div class="text-secondary">
-          AI использует только найденные строки отчетов и не должен подставлять отсутствующие цифры.
+          Используется только как помощник для сложных строк. Главные цифры выше берутся из структурного разбора Excel.
         </div>
       </div>
       <form method="post" action="/dashboard/{{ package.id }}/ai-extract">

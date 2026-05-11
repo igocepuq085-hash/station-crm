@@ -243,12 +243,67 @@ def _non_empty_numbers(values: list[int | float | None]) -> bool:
     return any(value is not None for value in values)
 
 
+def _metric_value(metric_sources: list[RawMetric], metric_key: str) -> int | None:
+    for metric in metric_sources:
+        if metric.metric_key == metric_key and metric.metric_value is not None:
+            return int(metric.metric_value)
+    return None
+
+
+def _build_park_values(metric_sources: list[RawMetric], ai_metrics: list[AIExtractedMetric]) -> dict:
+    total = _metric_value(metric_sources, "park_total") or _ai_value(ai_metrics, "wagon_park", "total")
+    loaded = _metric_value(metric_sources, "park_loaded") or _ai_value(ai_metrics, "wagon_park", "loaded")
+    good = _metric_value(metric_sources, "park_good")
+    bad = _metric_value(metric_sources, "park_bad") or _ai_value(ai_metrics, "wagon_park", "bad_order")
+    not_included = _metric_value(metric_sources, "park_not_included") or _ai_value(ai_metrics, "wagon_park", "not_included")
+    other = None
+    if total is not None:
+        known = sum(value or 0 for value in (loaded, good, bad))
+        other = max(total - known, 0)
+    return {
+        "total": total,
+        "loaded": loaded,
+        "good": good,
+        "bad": bad,
+        "not_included": not_included,
+        "other": other,
+    }
+
+
+def _format_number(value: int | float | None) -> str:
+    if value is None:
+        return "нет данных"
+    return f"{int(round(value)):,}".replace(",", " ")
+
+
+def _build_summary_cards(
+    chain_metric: DailyChainMetric | None,
+    product_metrics: list[ProductWagonMetric],
+    park: dict,
+) -> list[dict]:
+    loaded_tons = sum(metric.loaded_tons or 0 for metric in product_metrics)
+    planned_tons = sum(metric.planned_loading_tons or 0 for metric in product_metrics)
+    plan_fact_ratio = _safe_ratio(
+        int(loaded_tons) if loaded_tons else None,
+        int(planned_tons) if planned_tons else None,
+    )
+    return [
+        {"label": "Прибыло на Промышленную", "value": _format_number(chain_metric.arrived_prom if chain_metric else None), "hint": "вагонов за сутки"},
+        {"label": "Отправлено в Сургут", "value": _format_number(chain_metric.sent_surgut if chain_metric else None), "hint": "вагонов за сутки"},
+        {"label": "Оформлено", "value": _format_number(chain_metric.documented_wagons if chain_metric else None), "hint": "вагонов по Приложению N3а"},
+        {"label": "Факт налива", "value": _format_number(loaded_tons if loaded_tons else None), "hint": f"тонн, выполнение плана {plan_fact_ratio}%" if plan_fact_ratio is not None else "тонн"},
+        {"label": "Парк Промышленной", "value": _format_number(park.get("total")), "hint": f"годные {park.get('good') or 0}, негодные {park.get('bad') or 0}"},
+        {"label": "Не включено / Сургут", "value": _format_number(park.get("not_included")), "hint": "вагонов по листу наличия"},
+    ]
+
+
 def _build_chart_data(
     chain_metric: DailyChainMetric | None,
     product_metrics: list[ProductWagonMetric],
     raw_rows: list[RawExtractedRow],
     all_chain_metrics: list[DailyChainMetric],
     ai_metrics: list[AIExtractedMetric],
+    metric_sources: list[RawMetric],
 ) -> dict:
     chain_values = _chain_values(chain_metric, ai_metrics)
     funnel_values = [
@@ -298,15 +353,8 @@ def _build_chart_data(
     ]
     product_labels = [metric.product for metric in visible_product_metrics]
 
-    loaded = _extract_row_value(raw_rows, ("груженые",)) or _ai_value(ai_metrics, "wagon_park", "loaded")
-    empty = _extract_row_value(raw_rows, ("порожние",)) or _ai_value(ai_metrics, "wagon_park", "empty")
-    bad = _extract_row_value(raw_rows, ("негодные",)) or _ai_value(ai_metrics, "wagon_park", "bad_order")
-    total = _extract_row_value(raw_rows, ("парк всего", "вагоны всего")) or _ai_value(ai_metrics, "wagon_park", "total")
-    other = None
-    if total is not None:
-        known = sum(value or 0 for value in (loaded, empty, bad))
-        other = _ai_value(ai_metrics, "wagon_park", "other") or max(total - known, 0)
-    park_values = [loaded, empty, bad, other]
+    park = _build_park_values(metric_sources, ai_metrics)
+    park_values = [park["loaded"], park["good"], park["bad"], park["other"]]
 
     reasons = Counter(
         metric.main_limitation
@@ -349,7 +397,7 @@ def _build_chart_data(
         },
         "park_structure": {
             "has_data": _non_empty_numbers(park_values),
-            "labels": ["Груженые", "Порожние", "Негодные", "Прочие"],
+            "labels": ["Груженые", "Годные", "Негодные", "Прочие"],
             "values": [value if value is not None else 0 for value in park_values],
         },
         "product_matrix": {
@@ -443,6 +491,7 @@ def get_dashboard_data(db: Session, package_id: int) -> dict:
         .order_by(AIExtractionRun.created_at.desc())
     ).first()
     product_metrics_view = _merge_ai_product_metrics(product_metrics, ai_metrics)
+    park_values = _build_park_values(metric_sources, ai_metrics)
 
     source_counts: dict[str, int] = {}
     keyword_counts: dict[str, int] = {}
@@ -459,12 +508,14 @@ def get_dashboard_data(db: Session, package_id: int) -> dict:
         "sheets": sheets,
         "raw_rows": raw_rows,
         "chain": _build_chain_view(chain_metric, ai_metrics),
+        "summary_cards": _build_summary_cards(chain_metric, product_metrics_view, park_values),
+        "park_values": park_values,
         "metric_sources": metric_sources,
         "product_metrics": product_metrics_view,
         "false_coverage_warnings": false_park_coverage_warnings(product_metrics_view),
         "management_insight": build_ai_or_rule_based_summary(db, package_id),
         "ai_extraction": _ai_extraction_view(ai_run, len(ai_metrics)),
-        "charts": _build_chart_data(chain_metric, product_metrics_view, raw_rows, all_chain_metrics, ai_metrics),
+        "charts": _build_chart_data(chain_metric, product_metrics_view, raw_rows, all_chain_metrics, ai_metrics, metric_sources),
         "source_counts": source_counts,
         "keyword_counts": dict(sorted(keyword_counts.items(), key=lambda item: item[1], reverse=True)),
     }

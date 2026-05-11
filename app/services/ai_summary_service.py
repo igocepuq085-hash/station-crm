@@ -37,6 +37,14 @@ def _safe_ratio(numerator: int | None, denominator: int | None) -> float | None:
 
 
 def _latest_chain_metric(db: Session, package_id: int) -> DailyChainMetric | None:
+    metric = db.scalars(
+        select(DailyChainMetric)
+        .where(DailyChainMetric.package_id == package_id)
+        .where(DailyChainMetric.shift_type == "сутки")
+        .order_by(DailyChainMetric.created_at.desc())
+    ).first()
+    if metric is not None:
+        return metric
     return db.scalars(
         select(DailyChainMetric)
         .where(DailyChainMetric.package_id == package_id)
@@ -58,12 +66,15 @@ def _calculated_payload(db: Session, package_id: int) -> dict[str, Any]:
             "product": metric.product,
             "wagon_group": metric.wagon_group,
             "planned_loading_wagons": metric.planned_loading_wagons,
+            "planned_loading_tons": metric.planned_loading_tons,
             "product_stock_tons": metric.product_stock_tons,
             "available_wagons_total": metric.available_wagons_total,
             "available_wagons_good": metric.available_wagons_good,
             "available_wagons_bad": metric.available_wagons_bad,
             "loaded_wagons": metric.loaded_wagons,
+            "loaded_tons": metric.loaded_tons,
             "documented_wagons": metric.documented_wagons,
+            "documented_tons": metric.documented_tons,
             "sent_wagons": metric.sent_wagons,
             "wagon_balance": metric.wagon_balance,
             "wagon_coverage_percent": metric.wagon_coverage_percent,
@@ -116,6 +127,20 @@ def _normalize_ai_result(result: dict[str, Any]) -> dict:
     return normalized
 
 
+def _looks_too_technical(result: dict[str, Any]) -> bool:
+    text = " ".join(str(result.get(key) or "") for key in SUMMARY_KEYS)
+    technical_tokens = (
+        "processed_prom",
+        "loaded_wagons",
+        "documented_wagons",
+        "sent_wagons",
+        "available_wagons",
+        "wagon_coverage",
+        "null",
+    )
+    return any(token in text for token in technical_tokens)
+
+
 def build_ai_or_rule_based_summary(db: Session, package_id: int) -> dict:
     if not settings.use_ai_summary or not settings.openai_api_key:
         return _fallback(db, package_id)
@@ -141,6 +166,8 @@ def build_ai_or_rule_based_summary(db: Session, package_id: int) -> dict:
             temperature=0,
         )
         parsed = json.loads(response.output_text)
+        if _looks_too_technical(parsed):
+            return _fallback(db, package_id, source="rule_based_ai_too_technical")
         return _normalize_ai_result(parsed)
     except Exception:
         return _fallback(db, package_id, source="rule_based_ai_error")

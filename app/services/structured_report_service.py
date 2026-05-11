@@ -46,6 +46,7 @@ GROUP_ALIASES = {
     "МЕТ": "МЕТ",
     "МТ": "МЕТ",
     "МТБЭ": "МТБЭ",
+    "ПРОЧИЕ": "Прочие",
 }
 
 SKIP_PRODUCT_TOKENS = ("ИТОГО", "ВСЕГО", "ПРОДУКТ", "СПБ")
@@ -225,7 +226,7 @@ def _extract_park_summary(df: pd.DataFrame, report_file: ReportFile, package: Re
     }
     if rows["total"] is not None:
         row = df.iloc[rows["total"]].tolist()
-        data.park["total"] = _int_number(row[1] if len(row) > 1 else None)
+        data.park["total"] = _next_number(row, 0)
         _add_raw_metric(data, package, report_file, "park_total", "Парк всего", data.park["total"], "ваг", None, "Сводка ПРОМ", rows["total"] + 1)
     for label, idx in rows.items():
         if idx is None:

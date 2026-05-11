@@ -12,6 +12,9 @@ def _safe_ratio(numerator: int | None, denominator: int | None) -> float | None:
 
 
 def _latest_day_metric(metrics: list[DailyChainMetric]) -> DailyChainMetric | None:
+    total_metrics = [metric for metric in metrics if metric.shift_type == "сутки"]
+    if total_metrics:
+        return total_metrics[-1]
     day_metrics = [metric for metric in metrics if metric.shift_type in (None, "day")]
     if day_metrics:
         return day_metrics[-1]
