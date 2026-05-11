@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+
+{% block title %}Вход - station-crm{% endblock %}
+
+{% block content %}
+<section class="dashboard-head">
+  <div class="container-fluid px-4">
+    <p class="eyebrow mb-2">station-crm</p>
+    <h1 class="page-title mb-2">Вход в систему</h1>
+    <div class="text-secondary">Доступ к отчетам и управленческим дашбордам защищен.</div>
+  </div>
+</section>
+
+<section class="container-fluid px-4 py-4">
+  <div class="login-panel">
+    {% if error %}
+      <div class="alert alert-danger">{{ error }}</div>
+    {% endif %}
+    <form method="post" action="/login" class="row g-3">
+      <input type="hidden" name="next" value="{{ next }}">
+      <div class="col-12">
+        <label class="form-label" for="username">Логин</label>
+        <input class="form-control form-control-lg" id="username" name="username" autocomplete="username" required>
+      </div>
+      <div class="col-12">
+        <label class="form-label" for="password">Пароль</label>
+        <input class="form-control form-control-lg" id="password" name="password" type="password" autocomplete="current-password" required>
+      </div>
+      <div class="col-12 d-grid">
+        <button class="btn btn-primary btn-lg" type="submit">Войти</button>
+      </div>
+    </form>
+  </div>
+</section>
+{% endblock %}

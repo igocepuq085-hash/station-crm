@@ -1,0 +1,186 @@
+{% extends "base.html" %}
+
+{% block title %}Тренды - station-crm{% endblock %}
+
+{% block content %}
+<section class="dashboard-head">
+  <div class="container-fluid px-4">
+    <div class="d-flex flex-wrap justify-content-between gap-3 align-items-start">
+      <div>
+        <p class="eyebrow mb-2">Динамика по загруженным комплектам</p>
+        <h1 class="page-title mb-2">Тренды станции</h1>
+        <div class="text-secondary">Дни, коэффициенты, парк и продуктовая погрузка.</div>
+      </div>
+      <a class="btn btn-outline-light" href="/upload">Загрузить отчеты</a>
+    </div>
+  </div>
+</section>
+
+<section class="container-fluid px-4 py-4">
+  <div class="section-block mb-4">
+    <h2 class="section-title">Фильтры</h2>
+    <form method="get" action="/trends" class="row g-3 align-items-end">
+      <div class="col-md-3">
+        <label class="form-label" for="date_from">Дата с</label>
+        <input class="form-control" type="date" id="date_from" name="date_from" value="{{ filters.date_from }}">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label" for="date_to">Дата по</label>
+        <input class="form-control" type="date" id="date_to" name="date_to" value="{{ filters.date_to }}">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label" for="product">Продукт</label>
+        <select class="form-select" id="product" name="product">
+          <option value="">Все продукты</option>
+          {% for product in products %}
+            <option value="{{ product }}" {% if product == filters.product %}selected{% endif %}>{{ product }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label" for="shift">Смена</label>
+        <select class="form-select" id="shift" name="shift">
+          <option value="all" {% if filters.shift == "all" %}selected{% endif %}>Сутки</option>
+          <option value="day" {% if filters.shift == "day" %}selected{% endif %}>День</option>
+          <option value="night" {% if filters.shift == "night" %}selected{% endif %}>Ночь</option>
+        </select>
+      </div>
+      <div class="col-md-1 d-grid">
+        <button class="btn btn-primary" type="submit">OK</button>
+      </div>
+    </form>
+  </div>
+
+  {% if not has_enough_dates %}
+    <div class="trend-message mb-4">Для трендов загрузите отчеты за несколько дат</div>
+  {% endif %}
+
+  <div class="chart-grid mb-4">
+    <div class="chart-card trend-chart-card">
+      <h2 class="section-title">Тренд по дням</h2>
+      {% if charts.movement.has_data %}
+        <canvas id="movementTrendChart"></canvas>
+      {% else %}
+        <div class="chart-empty">Недостаточно данных</div>
+      {% endif %}
+    </div>
+    <div class="chart-card trend-chart-card">
+      <h2 class="section-title">Тренд коэффициентов</h2>
+      {% if charts.ratios.has_data %}
+        <canvas id="ratioTrendChart"></canvas>
+      {% else %}
+        <div class="chart-empty">Недостаточно данных</div>
+      {% endif %}
+    </div>
+    <div class="chart-card trend-chart-card">
+      <h2 class="section-title">Тренд парка</h2>
+      {% if charts.park.has_data %}
+        <canvas id="parkTrendChart"></canvas>
+      {% else %}
+        <div class="chart-empty">Недостаточно данных</div>
+      {% endif %}
+    </div>
+    <div class="chart-card trend-chart-card">
+      <h2 class="section-title">Тренд по продуктам</h2>
+      {% if charts.products.has_data %}
+        <canvas id="productTrendChart"></canvas>
+      {% else %}
+        <div class="chart-empty">Недостаточно данных</div>
+      {% endif %}
+    </div>
+  </div>
+</section>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script>
+  const trendCharts = {{ charts|tojson }};
+  const trendPalette = {
+    green: "#1d8a5b",
+    yellow: "#d69e2e",
+    red: "#c24141",
+    blue: "#1f6f8b",
+    slate: "#334155",
+    violet: "#6d5bd0"
+  };
+
+  Chart.defaults.font.family = "Arial, sans-serif";
+  Chart.defaults.color = "#465465";
+  Chart.defaults.plugins.legend.labels.boxWidth = 10;
+  Chart.defaults.plugins.legend.labels.boxHeight = 10;
+
+  function makeTrendChart(id, config) {
+    const element = document.getElementById(id);
+    if (!element) return;
+    new Chart(element, config);
+  }
+
+  function lineDataset(label, data, color) {
+    return {
+      label,
+      data,
+      borderColor: color,
+      backgroundColor: color,
+      tension: 0.28,
+      pointRadius: 3,
+      borderWidth: 2
+    };
+  }
+
+  makeTrendChart("movementTrendChart", {
+    type: "line",
+    data: {
+      labels: trendCharts.movement.labels,
+      datasets: [
+        lineDataset("Прибыло на Промышленную", trendCharts.movement.arrived, trendPalette.blue),
+        lineDataset("Погружено", trendCharts.movement.loaded, trendPalette.green),
+        lineDataset("Оформлено", trendCharts.movement.documented, trendPalette.yellow),
+        lineDataset("Отправлено в Сургут", trendCharts.movement.sent, trendPalette.slate)
+      ]
+    },
+    options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }
+  });
+
+  makeTrendChart("ratioTrendChart", {
+    type: "line",
+    data: {
+      labels: trendCharts.ratios.labels,
+      datasets: [
+        lineDataset("Сквозной коэффициент обработки", trendCharts.ratios.throughput, trendPalette.blue),
+        lineDataset("Коэффициент оформления", trendCharts.ratios.documentation, trendPalette.yellow),
+        lineDataset("Коэффициент вывоза", trendCharts.ratios.dispatch, trendPalette.green)
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: { y: { beginAtZero: true, ticks: { callback: value => value + "%" } } }
+    }
+  });
+
+  makeTrendChart("parkTrendChart", {
+    type: "bar",
+    data: {
+      labels: trendCharts.park.labels,
+      datasets: [
+        { label: "Груженые", data: trendCharts.park.loaded, backgroundColor: trendPalette.green, borderRadius: 6 },
+        { label: "Порожние", data: trendCharts.park.empty, backgroundColor: trendPalette.blue, borderRadius: 6 },
+        { label: "Негодные", data: trendCharts.park.bad, backgroundColor: trendPalette.red, borderRadius: 6 },
+        { label: "Не включенные в сводку", data: trendCharts.park.not_in_summary, backgroundColor: trendPalette.slate, borderRadius: 6 }
+      ]
+    },
+    options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }
+  });
+
+  makeTrendChart("productTrendChart", {
+    type: "line",
+    data: {
+      labels: trendCharts.products.labels,
+      datasets: [
+        lineDataset("Погрузка", trendCharts.products.loaded, trendPalette.green),
+        lineDataset("Оформление", trendCharts.products.documented, trendPalette.yellow)
+      ]
+    },
+    options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }
+  });
+</script>
+{% endblock %}

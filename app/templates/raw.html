@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+
+{% block title %}Сырой слой #{{ package.id }} - station-crm{% endblock %}
+
+{% block content %}
+<section class="dashboard-head">
+  <div class="container-fluid px-4">
+    <div class="d-flex flex-wrap justify-content-between gap-3 align-items-start">
+      <div>
+        <p class="eyebrow mb-2">Сырой слой · комплект #{{ package.id }}</p>
+        <h1 class="page-title mb-2">Файлы, листы и найденные строки</h1>
+        <div class="text-secondary">
+          {% if package.report_date %}Дата отчета: {{ package.report_date.strftime("%d.%m.%Y") }} · {% endif %}
+          Сохраняется как источник для будущей нормализации и KPI.
+        </div>
+      </div>
+      <div class="d-flex gap-2">
+        <a class="btn btn-outline-secondary" href="/dashboard/{{ package.id }}">Дашборд</a>
+        <span class="status-pill status-{{ package.status }}">{{ package.status }}</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="container-fluid px-4 py-4">
+  <div class="section-block mb-4">
+    <h2 class="section-title">Фильтры</h2>
+    <form method="get" class="row g-3 align-items-end">
+      <div class="col-md-5">
+        <label class="form-label" for="keyword">Ключевое слово</label>
+        <select class="form-select" id="keyword" name="keyword">
+          <option value="">Все ключевые слова</option>
+          {% for keyword in unique_keywords %}
+            <option value="{{ keyword }}" {% if keyword == selected_keyword %}selected{% endif %}>{{ keyword }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-5">
+        <label class="form-label" for="sheet_name">Лист</label>
+        <select class="form-select" id="sheet_name" name="sheet_name">
+          <option value="">Все листы</option>
+          {% for sheet in sheet_names %}
+            <option value="{{ sheet }}" {% if sheet == selected_sheet_name %}selected{% endif %}>{{ sheet }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2 d-grid">
+        <button class="btn btn-primary" type="submit">Применить</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="row g-4">
+    <div class="col-xl-4">
+      <div class="section-block mb-4">
+        <h2 class="section-title">Файлы комплекта</h2>
+        <div class="file-list">
+          {% for file in files %}
+            <div>
+              <span>{{ file.detected_report_type }} · {{ file.file_type }} · {{ file.status }}</span>
+              <strong>{{ file.original_filename }}</strong>
+              <code>{{ file.file_hash[:16] }}...</code>
+            </div>
+          {% else %}
+            <div class="empty-state">Файлы не найдены.</div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="section-block">
+        <h2 class="section-title">Листы Excel</h2>
+        <div class="raw-sheet-list">
+          {% for sheet in sheets %}
+            <div class="raw-sheet">
+              <strong>{{ sheet.sheet_name }}</strong>
+              <span>{{ sheet.source_type }} · {{ sheet.rows_count }} x {{ sheet.columns_count }}</span>
+            </div>
+          {% else %}
+            <div class="empty-state">Листы не найдены.</div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <div class="col-xl-8">
+      <div class="section-block">
+        <div class="d-flex justify-content-between gap-3 align-items-center mb-3">
+          <h2 class="section-title mb-0">Найденные строки</h2>
+          <span class="text-secondary">{{ raw_rows|length }} строк</span>
+        </div>
+        <div class="raw-row-list">
+          {% for row in raw_rows %}
+            <article class="raw-row">
+              <div class="raw-meta">
+                <span>{{ row.file.detected_report_type }}</span>
+                <span>{{ row.file.original_filename }}</span>
+                {% if row.sheet_name %}<span>{{ row.sheet_name }}</span>{% endif %}
+                {% if row.row_number %}<span>строка {{ row.row_number }}</span>{% endif %}
+              </div>
+              <div class="raw-keywords">{{ row.matched_keywords }}</div>
+              <p>{{ row.row_text }}</p>
+            </article>
+          {% else %}
+            <div class="empty-state">По текущим фильтрам строки не найдены.</div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}

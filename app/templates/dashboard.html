@@ -1,0 +1,446 @@
+{% extends "base.html" %}
+
+{% block title %}Дашборд комплекта #{{ package.id }} - station-crm{% endblock %}
+
+{% block content %}
+<section class="dashboard-head">
+  <div class="container-fluid px-4">
+    <div class="d-flex flex-wrap justify-content-between gap-3 align-items-start">
+      <div>
+        <p class="eyebrow mb-2">Комплект #{{ package.id }}</p>
+        <h1 class="page-title mb-2">Итоги обработки отчетов</h1>
+        <div class="text-secondary">
+          {% if package.report_date %}Дата отчета: {{ package.report_date.strftime("%d.%m.%Y") }} · {% endif %}
+          Создан: {{ package.created_at.strftime("%d.%m.%Y %H:%M") }}
+        </div>
+      </div>
+      <span class="status-pill status-{{ package.status }}">{{ package.status }}</span>
+    </div>
+  </div>
+</section>
+
+<section class="container-fluid px-4 py-4">
+  {% if package.comment and package.status == "error" %}
+    <div class="alert alert-danger">{{ package.comment }}</div>
+  {% endif %}
+  {% if not completeness.is_complete %}
+    <div class="alert alert-warning">
+      Комплект неполный. Не найдено: {{ completeness.missing_labels|join(", ") }}.
+    </div>
+  {% endif %}
+  {% if false_coverage_warnings %}
+    <div class="alert alert-warning">
+      <strong>Ложная обеспеченность парком.</strong>
+      {% for warning in false_coverage_warnings %}
+        <div>{{ warning }}</div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  <div class="kpi-grid mb-4">
+    {% for kpi in chain.kpis %}
+      <div class="kpi-card {% if kpi.value == 'нет данных' %}muted{% endif %}">
+        <div class="kpi-label">{{ kpi.label }}</div>
+        <div class="kpi-value kpi-value-fit">{{ kpi.value }}</div>
+        <div class="kpi-hint">{{ kpi.hint }}</div>
+      </div>
+    {% endfor %}
+  </div>
+
+  <div class="section-block mb-4">
+    <div class="d-flex flex-wrap justify-content-between gap-3 align-items-center mb-3">
+      <h2 class="section-title mb-0">Технологическая цепочка</h2>
+      <span class="text-secondary">Сургут → Промышленная → Сургут</span>
+    </div>
+    <div class="chain-funnel">
+      {% for step in chain.steps %}
+        <div class="chain-step">
+          <span>{{ step.label }}</span>
+          <strong>{% if step.value is not none %}{{ step.value }}{% else %}нет данных{% endif %}</strong>
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="section-block insight-block mb-4">
+    <div class="d-flex flex-wrap justify-content-between gap-3 align-items-center mb-3">
+      <h2 class="section-title mb-0">Управленческий вывод</h2>
+      <span class="text-secondary">{{ management_insight.source }}</span>
+    </div>
+    <div class="insight-grid">
+      <div class="insight-item">
+        <span>Главный разрыв</span>
+        <strong>{{ management_insight.main_gap }}</strong>
+      </div>
+      <div class="insight-item">
+        <span>Продуктовый риск</span>
+        <strong>{{ management_insight.product_risk }}</strong>
+      </div>
+      <div class="insight-item">
+        <span>Риск по вагонам</span>
+        <strong>{{ management_insight.wagon_risk }}</strong>
+      </div>
+      <div class="insight-item">
+        <span>Риск по оформлению</span>
+        <strong>{{ management_insight.documentation_risk }}</strong>
+      </div>
+      <div class="insight-item insight-item-wide">
+        <span>Рекомендация на следующую смену</span>
+        <strong>{{ management_insight.next_shift_recommendation }}</strong>
+      </div>
+    </div>
+  </div>
+
+  <div class="chart-grid mb-4">
+    <div class="chart-card">
+      <h2 class="section-title">Воронка движения вагонов</h2>
+      {% if charts.funnel.has_data %}
+        <canvas id="funnelChart"></canvas>
+      {% else %}
+        <div class="chart-empty">Недостаточно данных</div>
+      {% endif %}
+    </div>
+    <div class="chart-card">
+      <h2 class="section-title">День / ночь</h2>
+      {% if charts.shift.has_data %}
+        <canvas id="shiftChart"></canvas>
+      {% else %}
+        <div class="chart-empty">Недостаточно данных</div>
+      {% endif %}
+    </div>
+    <div class="chart-card">
+      <h2 class="section-title">Погружено против оформлено</h2>
+      {% if charts.loaded_documented.has_data %}
+        <canvas id="loadedDocumentedChart"></canvas>
+      {% else %}
+        <div class="chart-empty">Недостаточно данных</div>
+      {% endif %}
+    </div>
+    <div class="chart-card">
+      <h2 class="section-title">Структура парка вагонов</h2>
+      {% if charts.park_structure.has_data %}
+        <canvas id="parkStructureChart"></canvas>
+      {% else %}
+        <div class="chart-empty">Недостаточно данных</div>
+      {% endif %}
+    </div>
+    <div class="chart-card">
+      <h2 class="section-title">Продуктово-вагонная матрица</h2>
+      {% if charts.product_matrix.has_data %}
+        <canvas id="productMatrixChart"></canvas>
+      {% else %}
+        <div class="chart-empty">Недостаточно данных</div>
+      {% endif %}
+    </div>
+    <div class="chart-card">
+      <h2 class="section-title">Причины отклонений</h2>
+      {% if charts.reasons.has_data %}
+        <canvas id="reasonsChart"></canvas>
+      {% else %}
+        <div class="chart-empty">Недостаточно данных</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="section-block mb-4">
+    <div class="d-flex flex-wrap justify-content-between gap-3 align-items-center mb-3">
+      <h2 class="section-title mb-0">Продуктово-вагонная аналитика</h2>
+      <span class="text-secondary">Не общий парк, а соответствие продукта и вагонов</span>
+    </div>
+    <div class="table-responsive product-table-wrap">
+      <table class="table align-middle product-table">
+        <thead>
+          <tr>
+            <th>Продукт</th>
+            <th>Группа</th>
+            <th class="text-end">План</th>
+            <th class="text-end">Продукт на ЗСК</th>
+            <th class="text-end">Есть вагонов</th>
+            <th class="text-end">Годные</th>
+            <th class="text-end">Погружено</th>
+            <th class="text-end">Оформлено</th>
+            <th class="text-end">Отправлено</th>
+            <th class="text-end">Баланс</th>
+            <th>Статус</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for metric in product_metrics %}
+            <tr>
+              <td><strong>{{ metric.product }}</strong></td>
+              <td>{{ metric.wagon_group }}</td>
+              <td class="text-end">{{ metric.planned_loading_wagons if metric.planned_loading_wagons is not none else "нет данных" }}</td>
+              <td class="text-end">{{ metric.product_stock_tons|int if metric.product_stock_tons is not none else "нет данных" }}</td>
+              <td class="text-end">{{ metric.available_wagons_total if metric.available_wagons_total is not none else "нет данных" }}</td>
+              <td class="text-end">{{ metric.available_wagons_good if metric.available_wagons_good is not none else "нет данных" }}</td>
+              <td class="text-end">{{ metric.loaded_wagons if metric.loaded_wagons is not none else "нет данных" }}</td>
+              <td class="text-end">{{ metric.documented_wagons if metric.documented_wagons is not none else "нет данных" }}</td>
+              <td class="text-end">{{ metric.sent_wagons if metric.sent_wagons is not none else "нет данных" }}</td>
+              <td class="text-end">{{ metric.wagon_balance if metric.wagon_balance is not none else "нет данных" }}</td>
+              <td><span class="status-chip status-chip-{{ metric.main_limitation|replace(' ', '-') }}">{{ metric.main_limitation }}</span></td>
+            </tr>
+          {% else %}
+            <tr><td colspan="11" class="text-secondary">Продуктовые метрики пока не рассчитаны.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="row g-4">
+    <div class="col-xl-4">
+      <div class="section-block">
+        <h2 class="section-title">Файлы</h2>
+        <div class="completeness-list mb-3">
+          {% for item in completeness.checks %}
+            <div class="completeness-item {% if item.found %}is-found{% else %}is-missing{% endif %}">
+              <span>{{ item.label }}</span>
+              <strong>{% if item.found %}найден{% else %}не найден{% endif %}</strong>
+            </div>
+          {% endfor %}
+        </div>
+        <div class="file-list">
+          {% for file in files %}
+            <div>
+              <span>{{ file.detected_report_type }} · {{ file.file_type }} · {{ file.status }}</span>
+              <strong>{{ file.original_filename }}</strong>
+            </div>
+          {% endfor %}
+        </div>
+        <a class="btn btn-sm btn-outline-primary mt-3" href="/raw/{{ package.id }}">Открыть сырой слой</a>
+      </div>
+
+      <div class="section-block mt-4">
+        <h2 class="section-title">Источники</h2>
+        <div class="mini-bars">
+          {% for source, count in source_counts.items() %}
+            <div class="mini-bar-row">
+              <span>{{ source }}</span>
+              <strong>{{ count }}</strong>
+            </div>
+          {% else %}
+            <div class="empty-state">Строки пока не найдены.</div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="section-block mt-4">
+        <h2 class="section-title">Ключевые слова</h2>
+        <div class="keyword-cloud">
+          {% for keyword, count in keyword_counts.items() %}
+            <span>{{ keyword }} <strong>{{ count }}</strong></span>
+          {% else %}
+            <div class="empty-state">Совпадений нет.</div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="section-block mt-4">
+        <h2 class="section-title">Сырье для метрик</h2>
+        <div class="metric-source-list">
+          {% for metric in metric_sources %}
+            <div class="metric-source">
+              <strong>{{ metric.metric_label }}</strong>
+              <span>
+                {% if metric.metric_value is not none %}{{ metric.metric_value|int }} {{ metric.unit or "" }}{% else %}число не найдено{% endif %}
+              </span>
+              <small>
+                {{ metric.file.detected_report_type }}
+                {% if metric.sheet_name %} · {{ metric.sheet_name }}{% endif %}
+                {% if metric.row_number %} · строка {{ metric.row_number }}{% endif %}
+              </small>
+              {% if metric.source_row_text %}
+                <p>{{ metric.source_row_text }}</p>
+              {% endif %}
+            </div>
+          {% else %}
+            <div class="empty-state">Попытки извлечения метрик пока не найдены.</div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <div class="col-xl-8">
+      <div class="section-block mb-4">
+        <h2 class="section-title">Найденные листы</h2>
+        <div class="table-responsive">
+          <table class="table align-middle">
+            <thead>
+              <tr>
+                <th>Источник</th>
+                <th>Лист</th>
+                <th class="text-end">Строк</th>
+                <th class="text-end">Колонок</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for sheet in sheets %}
+                <tr>
+                  <td><span class="source-badge">{{ sheet.source_type }}</span></td>
+                  <td>{{ sheet.sheet_name }}</td>
+                  <td class="text-end">{{ sheet.rows_count }}</td>
+                  <td class="text-end">{{ sheet.columns_count }}</td>
+                </tr>
+              {% else %}
+                <tr><td colspan="4" class="text-secondary">Листы не найдены.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="section-block">
+        <h2 class="section-title">Строки по ключевым словам</h2>
+        <div class="raw-row-list">
+          {% for row in raw_rows %}
+            <article class="raw-row">
+              <div class="raw-meta">
+                <span>{{ row.file.detected_report_type }}</span>
+                {% if row.sheet_name %}<span>{{ row.sheet_name }}</span>{% endif %}
+                {% if row.row_number %}<span>строка {{ row.row_number }}</span>{% endif %}
+              </div>
+              <div class="raw-keywords">{{ row.matched_keywords }}</div>
+              <p>{{ row.row_text }}</p>
+            </article>
+          {% else %}
+            <div class="empty-state">По выбранным словам строки не найдены.</div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script>
+  const charts = {{ charts|tojson }};
+  const palette = {
+    green: "#1d8a5b",
+    yellow: "#d69e2e",
+    red: "#c24141",
+    blue: "#1f6f8b",
+    slate: "#334155",
+    softBlue: "rgba(31, 111, 139, 0.18)",
+    softGreen: "rgba(29, 138, 91, 0.18)",
+    softYellow: "rgba(214, 158, 46, 0.22)",
+    softRed: "rgba(194, 65, 65, 0.20)"
+  };
+
+  Chart.defaults.font.family = "Arial, sans-serif";
+  Chart.defaults.color = "#465465";
+  Chart.defaults.plugins.legend.labels.boxWidth = 10;
+  Chart.defaults.plugins.legend.labels.boxHeight = 10;
+
+  function makeChart(id, config) {
+    const element = document.getElementById(id);
+    if (!element) return;
+    new Chart(element, config);
+  }
+
+  makeChart("funnelChart", {
+    type: "bar",
+    data: {
+      labels: charts.funnel.labels,
+      datasets: [{
+        label: "Вагоны",
+        data: charts.funnel.values,
+        backgroundColor: [palette.blue, palette.blue, palette.green, palette.green, palette.yellow, palette.slate],
+        borderRadius: 6
+      }]
+    },
+    options: {
+      indexAxis: "y",
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: { x: { beginAtZero: true }, y: { grid: { display: false } } }
+    }
+  });
+
+  makeChart("shiftChart", {
+    type: "bar",
+    data: {
+      labels: charts.shift.labels,
+      datasets: [
+        { label: "День", data: charts.shift.day, backgroundColor: palette.blue, borderRadius: 6 },
+        { label: "Ночь", data: charts.shift.night, backgroundColor: palette.slate, borderRadius: 6 }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: { y: { beginAtZero: true } }
+    }
+  });
+
+  makeChart("loadedDocumentedChart", {
+    type: "bar",
+    data: {
+      labels: charts.loaded_documented.labels,
+      datasets: [
+        { label: "Погружено", data: charts.loaded_documented.loaded, backgroundColor: palette.green, borderRadius: 6 },
+        { label: "Оформлено", data: charts.loaded_documented.documented, backgroundColor: palette.yellow, borderRadius: 6 }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: { y: { beginAtZero: true } }
+    }
+  });
+
+  makeChart("parkStructureChart", {
+    type: "doughnut",
+    data: {
+      labels: charts.park_structure.labels,
+      datasets: [{
+        data: charts.park_structure.values,
+        backgroundColor: [palette.green, palette.blue, palette.red, palette.slate],
+        borderWidth: 0
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: "62%"
+    }
+  });
+
+  makeChart("productMatrixChart", {
+    type: "bar",
+    data: {
+      labels: charts.product_matrix.labels,
+      datasets: [
+        { label: "План", data: charts.product_matrix.planned, backgroundColor: palette.softBlue, borderColor: palette.blue, borderWidth: 1, borderRadius: 6 },
+        { label: "Годные", data: charts.product_matrix.good, backgroundColor: palette.softGreen, borderColor: palette.green, borderWidth: 1, borderRadius: 6 },
+        { label: "Факт погрузки", data: charts.product_matrix.loaded, backgroundColor: palette.softYellow, borderColor: palette.yellow, borderWidth: 1, borderRadius: 6 }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: { y: { beginAtZero: true } }
+    }
+  });
+
+  makeChart("reasonsChart", {
+    type: "bar",
+    data: {
+      labels: charts.reasons.labels,
+      datasets: [{
+        label: "Кол-во продуктов",
+        data: charts.reasons.values,
+        backgroundColor: palette.red,
+        borderRadius: 6
+      }]
+    },
+    options: {
+      indexAxis: "y",
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: { x: { beginAtZero: true, ticks: { precision: 0 } }, y: { grid: { display: false } } }
+    }
+  });
+</script>
+{% endblock %}
