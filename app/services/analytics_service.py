@@ -311,6 +311,7 @@ def _build_source_tables(
 
     pdf_rows = [row for row in raw_rows if row.file.detected_report_type == "scanned_pdf" or row.file.file_type == "pdf"]
     cards = [
+        ("Работа завода", "Сводка диспетчера ДО", "Сырье, потери, выработка, Юж. Балык и не ЖД отборы", "factory_feedstock_fact_tons"),
         ("Парк вагонов", "Сводка ПРОМ", "Парк всего, годные, негодные, груженые", "park_total"),
         ("Обмен поездов", "Отчет НС", "Прибытие и отправление по сменам", "arrived_prom"),
         ("Наличие в Сургуте", "Наличие в Сургуте", "Вагоны в Сургуте и не включенные в сводку", "wagons_in_surgut"),
@@ -344,6 +345,72 @@ def _build_source_tables(
         }
     )
     return result
+
+
+def _raw_metric(metric_sources: list[RawMetric], metric_key: str, product: str | None = None) -> RawMetric | None:
+    for metric in metric_sources:
+        if metric.metric_key != metric_key:
+            continue
+        if product is not None and metric.product != product:
+            continue
+        return metric
+    return None
+
+
+def _factory_metric_value(metric_sources: list[RawMetric], metric_key: str, product: str | None = None) -> float | None:
+    metric = _raw_metric(metric_sources, metric_key, product)
+    return metric.metric_value if metric else None
+
+
+def _build_factory_view(metric_sources: list[RawMetric]) -> dict:
+    plan = _factory_metric_value(metric_sources, "factory_feedstock_plan_tons")
+    fact = _factory_metric_value(metric_sources, "factory_feedstock_fact_tons")
+    deviation = _factory_metric_value(metric_sources, "factory_feedstock_deviation_tons")
+    losses_plan = _factory_metric_value(metric_sources, "factory_losses_plan_tons")
+    losses_fact = _factory_metric_value(metric_sources, "factory_losses_fact_tons")
+    south_balyk = _factory_metric_value(metric_sources, "factory_south_balyk_tons")
+    transneft = _factory_metric_value(metric_sources, "factory_transneft_tons")
+    production_plan = _factory_metric_value(metric_sources, "factory_production_plan_tons", "ВСЕГО")
+    production_fact = _factory_metric_value(metric_sources, "factory_production_fact_tons", "ВСЕГО")
+
+    products = sorted(
+        {
+            metric.product
+            for metric in metric_sources
+            if metric.metric_key.startswith("factory_production_") and metric.product
+        },
+        key=str.lower,
+    )
+    production_rows = []
+    for product in products:
+        normalized_product = re.sub(r"\s+", " ", product).strip()
+        if normalized_product in {"ВСЕГО", "ИТОГО СУГ и ЛВЖ", "ИТОГО СНП", "ВСЕГО НП"}:
+            continue
+        product_plan = _factory_metric_value(metric_sources, "factory_production_plan_tons", product)
+        product_fact = _factory_metric_value(metric_sources, "factory_production_fact_tons", product)
+        if product_plan in (None, 0) and product_fact in (None, 0):
+            continue
+        production_rows.append(
+            {
+                "product": normalized_product,
+                "plan": product_plan,
+                "fact": product_fact,
+                "deviation": (product_fact - product_plan) if product_fact is not None and product_plan is not None else None,
+            }
+        )
+
+    cards = [
+        {"label": "Прием сырья", "value": _format_number(fact), "hint": f"план {_format_number(plan)}, откл. {_format_number(deviation)} т"},
+        {"label": "Выработка ожидаемая", "value": _format_number(production_fact), "hint": f"план {_format_number(production_plan)} т"},
+        {"label": "Потери", "value": _format_number(losses_fact), "hint": f"план {_format_number(losses_plan)} т"},
+        {"label": "Юж. Балык", "value": _format_number(south_balyk), "hint": "СУГ уходит в трубу, не ЖД"},
+        {"label": "Транснефть", "value": _format_number(transneft), "hint": "не ЖД отбор, если есть в отчете"},
+    ]
+    return {
+        "cards": cards,
+        "production_rows": production_rows,
+        "has_data": any(card["value"] != "нет данных" for card in cards) or bool(production_rows),
+    }
 
 
 def _build_chart_data(
@@ -401,6 +468,7 @@ def _build_chart_data(
         )
     ]
     product_labels = [metric.product for metric in visible_product_metrics]
+    factory = _build_factory_view(metric_sources)
 
     park = _build_park_values(metric_sources, ai_metrics)
     park_values = [park["loaded"], park["good"], park["bad"], park["other"]]
@@ -463,6 +531,12 @@ def _build_chart_data(
             "planned": [(metric.planned_loading_tons if metric.planned_loading_tons is not None else metric.planned_loading_wagons) or 0 for metric in visible_product_metrics],
             "good": [(metric.product_stock_tons if metric.product_stock_tons is not None else metric.available_wagons_good) or 0 for metric in visible_product_metrics],
             "loaded": [(metric.loaded_tons if metric.loaded_tons is not None else metric.loaded_wagons) or 0 for metric in visible_product_metrics],
+        },
+        "factory_production": {
+            "has_data": bool(factory["production_rows"]),
+            "labels": [row["product"] for row in factory["production_rows"]],
+            "plan": [row["plan"] or 0 for row in factory["production_rows"]],
+            "fact": [row["fact"] or 0 for row in factory["production_rows"]],
         },
         "reasons": {
             "has_data": bool(top_reasons),
@@ -559,6 +633,7 @@ def get_dashboard_data(db: Session, package_id: int) -> dict:
         "chain": _build_chain_view(chain_metric, ai_metrics),
         "summary_cards": _build_summary_cards(chain_metric, product_metrics_view, park_values),
         "park_values": park_values,
+        "factory": _build_factory_view(metric_sources),
         "source_tables": _build_source_tables(package_id, sheets, metric_sources, raw_rows),
         "metric_sources": metric_sources,
         "product_metrics": product_metrics_view,

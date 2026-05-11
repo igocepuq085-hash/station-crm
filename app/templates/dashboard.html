@@ -53,6 +53,65 @@
     </div>
   </div>
 
+  <div class="section-block factory-block mb-4">
+    <div class="d-flex flex-wrap justify-content-between gap-3 align-items-center mb-3">
+      <h2 class="section-title mb-0">Работа завода</h2>
+      <span class="text-secondary">Сырье, выработка и отборы не ЖД-путями из верхней части Сводки диспетчера ДО</span>
+    </div>
+    <div class="factory-grid mb-3">
+      {% for card in factory.cards %}
+        <div class="factory-card">
+          <span>{{ card.label }}</span>
+          <strong>{{ card.value }}</strong>
+          <small>{{ card.hint }}</small>
+        </div>
+      {% endfor %}
+    </div>
+    <div class="row g-3">
+      <div class="col-xl-7">
+        <div class="factory-chart-panel">
+          <h3>Выработка: план / факт</h3>
+          {% if charts.factory_production.has_data %}
+            <canvas id="factoryProductionChart"></canvas>
+          {% else %}
+            <div class="chart-empty">Недостаточно данных</div>
+          {% endif %}
+        </div>
+      </div>
+      <div class="col-xl-5">
+        <div class="factory-table-panel">
+          <h3>Продукты завода</h3>
+          <div class="table-responsive factory-table-wrap">
+            <table class="table align-middle factory-table">
+              <thead>
+                <tr>
+                  <th>Продукт</th>
+                  <th class="text-end">План, т</th>
+                  <th class="text-end">Факт, т</th>
+                  <th class="text-end">Откл., т</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in factory.production_rows %}
+                  <tr>
+                    <td><strong>{{ row.product }}</strong></td>
+                    <td class="text-end">{{ row.plan|round|int if row.plan is not none else "нет данных" }}</td>
+                    <td class="text-end">{{ row.fact|round|int if row.fact is not none else "нет данных" }}</td>
+                    <td class="text-end {% if row.deviation is not none and row.deviation < 0 %}text-danger{% elif row.deviation is not none and row.deviation > 0 %}text-success{% endif %}">
+                      {{ row.deviation|round|int if row.deviation is not none else "нет данных" }}
+                    </td>
+                  </tr>
+                {% else %}
+                  <tr><td colspan="4" class="text-secondary">Данные выработки пока не рассчитаны.</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div class="section-block mb-4">
     <div class="d-flex flex-wrap justify-content-between gap-3 align-items-center mb-3">
       <h2 class="section-title mb-0">Провалиться в таблицы</h2>
@@ -474,6 +533,22 @@
         { label: "План, т", data: charts.product_matrix.planned, backgroundColor: palette.softBlue, borderColor: palette.blue, borderWidth: 1, borderRadius: 6 },
         { label: "Остаток ЗСК, т", data: charts.product_matrix.good, backgroundColor: palette.softGreen, borderColor: palette.green, borderWidth: 1, borderRadius: 6 },
         { label: "Факт налива, т", data: charts.product_matrix.loaded, backgroundColor: palette.softYellow, borderColor: palette.yellow, borderWidth: 1, borderRadius: 6 }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: { y: { beginAtZero: true } }
+    }
+  });
+
+  makeChart("factoryProductionChart", {
+    type: "bar",
+    data: {
+      labels: charts.factory_production.labels,
+      datasets: [
+        { label: "План, т", data: charts.factory_production.plan, backgroundColor: palette.softBlue, borderColor: palette.blue, borderWidth: 1, borderRadius: 6 },
+        { label: "Факт, т", data: charts.factory_production.fact, backgroundColor: palette.green, borderRadius: 6 }
       ]
     },
     options: {

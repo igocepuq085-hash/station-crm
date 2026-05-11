@@ -78,6 +78,14 @@
       {% endif %}
     </div>
     <div class="chart-card trend-chart-card">
+      <h2 class="section-title">Тренд работы завода</h2>
+      {% if charts.factory.has_data %}
+        <canvas id="factoryTrendChart"></canvas>
+      {% else %}
+        <div class="chart-empty">Недостаточно данных</div>
+      {% endif %}
+    </div>
+    <div class="chart-card trend-chart-card">
       <h2 class="section-title">Тренд парка</h2>
       {% if charts.park.has_data %}
         <canvas id="parkTrendChart"></canvas>
@@ -171,6 +179,21 @@
         { label: "Порожние", data: trendCharts.park.empty, backgroundColor: trendPalette.blue, borderRadius: 6 },
         { label: "Негодные", data: trendCharts.park.bad, backgroundColor: trendPalette.red, borderRadius: 6 },
         { label: "Не включенные в сводку", data: trendCharts.park.not_in_summary, backgroundColor: trendPalette.slate, borderRadius: 6 }
+      ]
+    },
+    options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }
+  });
+
+  makeTrendChart("factoryTrendChart", {
+    type: "line",
+    data: {
+      labels: trendCharts.factory.labels,
+      datasets: [
+        lineDataset("Прием сырья", trendCharts.factory.feedstock, trendPalette.blue),
+        lineDataset("Выработка", trendCharts.factory.production, trendPalette.green),
+        lineDataset("Юж. Балык", trendCharts.factory.south_balyk, trendPalette.yellow),
+        lineDataset("Транснефть", trendCharts.factory.transneft, trendPalette.violet),
+        lineDataset("Потери", trendCharts.factory.losses, trendPalette.red)
       ]
     },
     options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }

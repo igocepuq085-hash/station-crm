@@ -5,7 +5,7 @@ import re
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from app.db.models import DailyChainMetric, ProductWagonMetric, RawExtractedRow, ReportPackage
+from app.db.models import DailyChainMetric, ProductWagonMetric, RawExtractedRow, RawMetric, ReportPackage
 from app.services.product_wagon_service import PRODUCT_GROUPS
 
 
@@ -44,6 +44,17 @@ def _sum_optional(values: list[int | None]) -> int | None:
     if not clean_values:
         return None
     return sum(clean_values)
+
+
+def _metric_value(metrics: list[RawMetric], metric_key: str, product: str | None = None) -> int | None:
+    for metric in metrics:
+        if metric.metric_key != metric_key:
+            continue
+        if product is not None and metric.product != product:
+            continue
+        if metric.metric_value is not None:
+            return int(metric.metric_value)
+    return None
 
 
 def _format_date(value: date) -> str:
@@ -94,6 +105,7 @@ def get_trends_data(
                 "movement": _empty_chart(chart_labels),
                 "ratios": _empty_chart(chart_labels),
                 "park": _empty_chart(chart_labels),
+                "factory": _empty_chart(chart_labels),
                 "products": _empty_chart(chart_labels),
             },
         }
@@ -145,6 +157,34 @@ def get_trends_data(
     rows_by_date: dict[date, list[RawExtractedRow]] = defaultdict(list)
     for row in rows:
         rows_by_date[package_dates[row.package_id]].append(row)
+
+    factory_metrics = db.scalars(
+        select(RawMetric)
+        .where(RawMetric.package_id.in_(package_ids))
+        .where(
+            RawMetric.metric_key.in_(
+                (
+                    "factory_feedstock_fact_tons",
+                    "factory_production_fact_tons",
+                    "factory_south_balyk_tons",
+                    "factory_transneft_tons",
+                    "factory_losses_fact_tons",
+                )
+            )
+        )
+    ).all()
+    factory_by_date: dict[date, list[RawMetric]] = defaultdict(list)
+    for metric in factory_metrics:
+        factory_by_date[package_dates[metric.package_id]].append(metric)
+
+    factory = {"feedstock": [], "production": [], "south_balyk": [], "transneft": [], "losses": []}
+    for current_date in labels_by_date:
+        metrics = factory_by_date.get(current_date, [])
+        factory["feedstock"].append(_metric_value(metrics, "factory_feedstock_fact_tons") or 0)
+        factory["production"].append(_metric_value(metrics, "factory_production_fact_tons", "ВСЕГО") or 0)
+        factory["south_balyk"].append(_metric_value(metrics, "factory_south_balyk_tons") or 0)
+        factory["transneft"].append(_metric_value(metrics, "factory_transneft_tons") or 0)
+        factory["losses"].append(_metric_value(metrics, "factory_losses_fact_tons") or 0)
 
     park = {"loaded": [], "empty": [], "bad": [], "not_in_summary": []}
     for current_date in labels_by_date:
@@ -205,6 +245,11 @@ def get_trends_data(
                 "has_data": has_enough_dates and any(any(values) for values in park.values()),
                 "labels": chart_labels,
                 **park,
+            },
+            "factory": {
+                "has_data": has_enough_dates and any(any(values) for values in factory.values()),
+                "labels": chart_labels,
+                **factory,
             },
             "products": {
                 "has_data": has_enough_dates and (any(loaded_by_product) or any(documented_by_product)),

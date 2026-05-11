@@ -163,6 +163,73 @@ body {
   font-size: 0.82rem;
 }
 
+.factory-block {
+  border-left: 4px solid var(--accent);
+}
+
+.factory-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.factory-card {
+  display: grid;
+  gap: 8px;
+  min-height: 116px;
+  border: 1px solid rgba(31, 111, 139, 0.18);
+  border-radius: 12px;
+  background: linear-gradient(180deg, #f8fcfd 0%, #ffffff 100%);
+  padding: 16px;
+}
+
+.factory-card span,
+.factory-card small {
+  color: var(--muted);
+}
+
+.factory-card span {
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
+.factory-card strong {
+  color: var(--accent-dark);
+  font-size: clamp(1.55rem, 2.3vw, 2.2rem);
+  line-height: 1;
+}
+
+.factory-chart-panel,
+.factory-table-panel {
+  height: 100%;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fbfcfd;
+  padding: 16px;
+}
+
+.factory-chart-panel h3,
+.factory-table-panel h3 {
+  font-size: 0.98rem;
+  font-weight: 800;
+  margin-bottom: 12px;
+}
+
+.factory-chart-panel canvas {
+  width: 100% !important;
+  height: 300px !important;
+}
+
+.factory-table-wrap {
+  max-height: 300px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.factory-table {
+  margin-bottom: 0;
+}
+
 .kpi-card {
   background: var(--paper);
   border: 1px solid var(--line);
@@ -631,6 +698,10 @@ body {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
+  .factory-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .chain-funnel {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
@@ -658,6 +729,10 @@ body {
   }
 
   .summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .factory-grid {
     grid-template-columns: 1fr;
   }
 

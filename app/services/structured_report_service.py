@@ -112,6 +112,7 @@ def _extract_operational_excel(path: Path, report_file: ReportFile, package: Rep
 
     if "Сводка диспетчера ДО" in workbook.sheet_names:
         df = pd.read_excel(path, sheet_name="Сводка диспетчера ДО", header=None)
+        _extract_factory_metrics(df, report_file, package, data)
         _extract_plan_fact(df, report_file, package, data)
         _extract_product_stock(df, report_file, package, data)
 
@@ -162,6 +163,62 @@ def _extract_plan_fact(df: pd.DataFrame, report_file: ReportFile, package: Repor
             fact.loaded_tons = loaded_value
             fact.source_notes.append(("loaded_tons", "Сводка диспетчера ДО", header_idx + 3, "сутки факт", loaded_value))
             _add_raw_metric(data, package, report_file, "loaded_tons", "Факт налива, т", loaded_value, "т", product, "Сводка диспетчера ДО", header_idx + 3)
+
+
+def _extract_factory_metrics(df: pd.DataFrame, report_file: ReportFile, package: ReportPackage, data: StructuredData) -> None:
+    _extract_factory_top_line(df, report_file, package, data)
+    _extract_factory_production(df, report_file, package, data)
+    _extract_non_rail_rows(df, report_file, package, data)
+
+
+def _extract_factory_top_line(df: pd.DataFrame, report_file: ReportFile, package: ReportPackage, data: StructuredData) -> None:
+    for row_idx in range(min(len(df), 8)):
+        row = df.iloc[row_idx].tolist()
+        row_norm = [_norm(value) for value in row]
+        if not any("ПРИЕМ СЫРЬЯ" in value for value in row_norm):
+            continue
+        for idx, value in enumerate(row_norm):
+            if "ПРИЕМ СЫРЬЯ" in value:
+                _add_raw_metric(data, package, report_file, "factory_feedstock_plan_tons", "Прием сырья, план", _number_at(row, idx + 1, "ПЛАН"), "т", None, "Сводка диспетчера ДО", row_idx + 1)
+                _add_raw_metric(data, package, report_file, "factory_feedstock_fact_tons", "Прием сырья, факт", _number_at(row, idx + 1, "ФАКТ"), "т", None, "Сводка диспетчера ДО", row_idx + 1)
+                _add_raw_metric(data, package, report_file, "factory_feedstock_deviation_tons", "Прием сырья, отклонение", _number_at(row, idx + 1, "ОТКЛОНЕНИЕ"), "т", None, "Сводка диспетчера ДО", row_idx + 1)
+            if "ПОТЕРИ" in value:
+                _add_raw_metric(data, package, report_file, "factory_losses_plan_tons", "Потери, план", _number_at(row, idx + 1, "ПЛАН"), "т", None, "Сводка диспетчера ДО", row_idx + 1)
+                _add_raw_metric(data, package, report_file, "factory_losses_fact_tons", "Потери, факт", _number_at(row, idx + 1, "ФАКТ"), "т", None, "Сводка диспетчера ДО", row_idx + 1)
+            if "ЮЖ. БАЛЫК" in value or "ЮЖ.БАЛЫК" in value:
+                _add_raw_metric(data, package, report_file, "factory_south_balyk_tons", "Юж. Балык, отбор СУГ в трубу", _next_float(row, idx + 1), "т", "СУГ", "Сводка диспетчера ДО", row_idx + 1)
+
+
+def _extract_factory_production(df: pd.DataFrame, report_file: ReportFile, package: ReportPackage, data: StructuredData) -> None:
+    header_idx = _find_row(df, lambda cells: _norm(cells[0]) == "ПРОДУКТ" if cells else False)
+    if header_idx is None or header_idx + 2 >= len(df):
+        return
+
+    header = df.iloc[header_idx].tolist()
+    plan_row = df.iloc[header_idx + 1].tolist()
+    fact_row = df.iloc[header_idx + 2].tolist()
+    for col, header_cell in enumerate(header):
+        label = _factory_product_label(header_cell)
+        if not label:
+            continue
+        plan_value = _number(plan_row[col] if col < len(plan_row) else None)
+        fact_value = _number(fact_row[col] if col < len(fact_row) else None)
+        group = _factory_group(label)
+        _add_raw_metric(data, package, report_file, "factory_production_plan_tons", "Выработка ожидаемая, план", plan_value, "т", label, "Сводка диспетчера ДО", header_idx + 2, group)
+        _add_raw_metric(data, package, report_file, "factory_production_fact_tons", "Выработка ожидаемая, факт", fact_value, "т", label, "Сводка диспетчера ДО", header_idx + 3, group)
+        if plan_value is not None and fact_value is not None:
+            _add_raw_metric(data, package, report_file, "factory_production_deviation_tons", "Выработка ожидаемая, отклонение", fact_value - plan_value, "т", label, "Сводка диспетчера ДО", header_idx + 3, group)
+
+
+def _extract_non_rail_rows(df: pd.DataFrame, report_file: ReportFile, package: ReportPackage, data: StructuredData) -> None:
+    for row_idx in range(len(df)):
+        row = df.iloc[row_idx].tolist()
+        text = " ".join(_cell_text(value) for value in row if _cell_text(value))
+        norm = _norm(text)
+        if "ТРАНСНЕФТ" not in norm:
+            continue
+        value = _next_float(row, 0)
+        _add_raw_metric(data, package, report_file, "factory_transneft_tons", "Транснефть, не ЖД отбор", value, "т", None, "Сводка диспетчера ДО", row_idx + 1)
 
 
 def _extract_product_stock(df: pd.DataFrame, report_file: ReportFile, package: ReportPackage, data: StructuredData) -> None:
@@ -504,6 +561,43 @@ def _product_from_text(value) -> str | None:
             alias_norm = _norm(alias)
             if re.search(rf"(?<![А-ЯA-Z0-9]){re.escape(alias_norm)}(?![А-ЯA-Z0-9])", text):
                 return product
+    return None
+
+
+def _factory_product_label(value) -> str | None:
+    text = _norm(value)
+    if not text or text == "ПРОДУКТ":
+        return None
+    label = re.sub(r"\s+", " ", _cell_text(value)).strip()
+    return label.title() if text in {"МЕТАНОЛ", "СБРОС. ГАЗ"} else label
+
+
+def _factory_group(label: str) -> str | None:
+    norm = _norm(label)
+    if "СУГ" in norm or norm in {"ПБА", "ПБТ", "ПТ", "ПА", "ФБ", "ШФЛУ", "ПГФ", "УВФ"}:
+        return "СУГ"
+    if "СНП" in norm or norm in {"ДГКЛ", "АИ-92", "АИ-95", "ТС", "ДТ"}:
+        return "СНП"
+    if "НП" in norm or norm in {"СК", "СК (НЕФТЬ)"}:
+        return "НП"
+    if norm == "ВСЕГО":
+        return "итого"
+    return None
+
+
+def _number_at(row: list, start: int, marker: str) -> float | None:
+    marker_norm = _norm(marker)
+    for idx in range(start, len(row)):
+        if _norm(row[idx]) == marker_norm:
+            return _next_float(row, idx + 1)
+    return None
+
+
+def _next_float(row: list, start: int) -> float | None:
+    for value in row[start : start + 6]:
+        parsed = _number(value)
+        if parsed is not None:
+            return parsed
     return None
 
 
