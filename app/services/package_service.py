@@ -1,4 +1,5 @@
 from datetime import date
+import re
 
 from fastapi import UploadFile
 from sqlalchemy.orm import Session
@@ -15,6 +16,21 @@ from app.services.file_service import (
     validate_file_suffix,
 )
 from app.services.parser_service import parse_package
+
+
+def infer_report_date_from_filename(*filenames: str | None) -> date | None:
+    for filename in filenames:
+        if not filename:
+            continue
+        match = re.search(r"(20\d{2})(\d{2})(\d{2})", filename)
+        if not match:
+            continue
+        year, month, day = map(int, match.groups())
+        try:
+            return date(year, month, day)
+        except ValueError:
+            continue
+    return None
 
 
 async def create_report_package(
@@ -34,8 +50,14 @@ async def create_report_package(
     wagons_path = await save_upload(wagons_file, package_dir, "wagons")
     pdf_path = await save_upload(pdf_file, package_dir, "pdf")
 
+    detected_report_date = report_date or infer_report_date_from_filename(
+        operational_file.filename,
+        wagons_file.filename,
+        pdf_file.filename,
+    )
+
     package = ReportPackage(
-        report_date=report_date,
+        report_date=detected_report_date,
         status="uploaded",
         comment=comment or "Комплект загружен через веб-форму.",
     )
