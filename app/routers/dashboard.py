@@ -21,6 +21,7 @@ def dashboard(package_id: int, request: Request, db: Session = Depends(get_db)):
     if not data:
         raise HTTPException(status_code=404, detail="Комплект отчетов не найден")
 
+    request.session["last_dashboard_package_id"] = package_id
     data["request"] = request
     return templates.TemplateResponse("dashboard.html", data)
 

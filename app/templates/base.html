@@ -13,8 +13,14 @@
       <a class="navbar-brand fw-semibold" href="/">station-crm</a>
       <div class="d-flex gap-2">
         {% if request.session.get("admin_user") %}
+          {% set last_dashboard_id = request.session.get("last_dashboard_package_id") %}
           <a class="btn btn-sm btn-outline-secondary" href="/">Главная</a>
-          <a class="btn btn-sm btn-outline-secondary" href="/trends">Тренды</a>
+          {% if last_dashboard_id %}
+            <a class="btn btn-sm btn-outline-secondary" href="/dashboard/{{ last_dashboard_id }}">Дашборд</a>
+            <a class="btn btn-sm btn-outline-secondary" href="/trends?from_dashboard={{ last_dashboard_id }}">Тренды</a>
+          {% else %}
+            <a class="btn btn-sm btn-outline-secondary" href="/trends">Тренды</a>
+          {% endif %}
           <a class="btn btn-sm btn-primary" href="/upload">Загрузить отчеты</a>
           <a class="btn btn-sm btn-outline-danger" href="/logout">Выйти</a>
         {% else %}

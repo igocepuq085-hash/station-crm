@@ -12,8 +12,8 @@
         <div class="text-secondary">Дни, коэффициенты, парк и продуктовая погрузка.</div>
       </div>
       <div class="d-flex flex-wrap gap-2">
-        {% if latest_package %}
-          <a class="btn btn-outline-light" href="/dashboard/{{ latest_package.id }}">Вернуться в дашборд #{{ latest_package.id }}</a>
+        {% if dashboard_package_id %}
+          <a class="btn btn-outline-light" href="/dashboard/{{ dashboard_package_id }}">Вернуться в дашборд #{{ dashboard_package_id }}</a>
         {% endif %}
         <a class="btn btn-light" href="/upload">Загрузить отчеты</a>
       </div>
@@ -54,6 +54,11 @@
         <button class="btn btn-primary" type="submit">OK</button>
       </div>
     </form>
+    {% if dashboard_package_id %}
+      <div class="mt-3">
+        <a class="btn btn-outline-secondary" href="/dashboard/{{ dashboard_package_id }}">Назад в дашборд #{{ dashboard_package_id }}</a>
+      </div>
+    {% endif %}
   </div>
 
   {% if not has_enough_dates %}

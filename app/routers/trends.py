@@ -21,11 +21,15 @@ def trends(
     date_to: date | None = Query(default=None),
     product: str | None = Query(default=None),
     shift: str = Query(default="all"),
+    from_dashboard: int | None = Query(default=None),
     db: Session = Depends(get_db),
 ):
     require_auth(request)
     if shift not in {"all", "day", "night"}:
         shift = "all"
+
+    if from_dashboard:
+        request.session["last_dashboard_package_id"] = from_dashboard
 
     data = get_trends_data(
         db,
@@ -34,5 +38,11 @@ def trends(
         product=product,
         shift=shift,
     )
+    dashboard_package_id = request.session.get("last_dashboard_package_id")
+    if not dashboard_package_id and data.get("latest_package"):
+        dashboard_package_id = data["latest_package"].id
+        request.session["last_dashboard_package_id"] = dashboard_package_id
+
+    data["dashboard_package_id"] = dashboard_package_id
     data["request"] = request
     return templates.TemplateResponse("trends.html", data)
