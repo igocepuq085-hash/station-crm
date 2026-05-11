@@ -99,6 +99,8 @@ def get_trends_data(
     chain_query = select(DailyChainMetric).where(DailyChainMetric.package_id.in_(package_ids))
     if shift != "all":
         chain_query = chain_query.where(DailyChainMetric.shift_type == shift)
+    else:
+        chain_query = chain_query.where(~DailyChainMetric.shift_type.in_(("day", "night")))
     chain_metrics = db.scalars(chain_query).all()
 
     chain_by_date: dict[date, list[DailyChainMetric]] = defaultdict(list)

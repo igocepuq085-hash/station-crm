@@ -3,6 +3,8 @@ import gc
 from pathlib import Path
 import sqlite3
 
+from sqlalchemy import inspect, text
+
 from app.core.config import settings
 from app.db.database import Base, engine
 
@@ -75,6 +77,7 @@ REQUIRED_SCHEMA: dict[str, set[str]] = {
         "loaded_wagons",
         "loaded_tons",
         "documented_wagons",
+        "documented_tons",
         "sent_wagons",
         "wagon_balance",
         "wagon_coverage_percent",
@@ -137,6 +140,7 @@ def init_database() -> None:
     settings.ensure_directories()
     if not settings.is_sqlite:
         Base.metadata.create_all(bind=engine)
+        _add_missing_columns()
         return
 
     database_path = _database_path()
@@ -148,3 +152,20 @@ def init_database() -> None:
         database_path.rename(backup_path)
 
     Base.metadata.create_all(bind=engine)
+
+
+def _add_missing_columns() -> None:
+    inspector = inspect(engine)
+    if "product_wagon_metrics" not in inspector.get_table_names():
+        return
+    columns = {column["name"] for column in inspector.get_columns("product_wagon_metrics")}
+    if "documented_tons" in columns:
+        return
+    dialect = engine.dialect.name
+    statement = (
+        "ALTER TABLE product_wagon_metrics ADD COLUMN IF NOT EXISTS documented_tons FLOAT"
+        if dialect == "postgresql"
+        else "ALTER TABLE product_wagon_metrics ADD COLUMN documented_tons FLOAT"
+    )
+    with engine.begin() as connection:
+        connection.execute(text(statement))

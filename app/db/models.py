@@ -156,6 +156,7 @@ class ProductWagonMetric(Base):
     loaded_wagons: Mapped[int | None] = mapped_column(Integer, nullable=True)
     loaded_tons: Mapped[float | None] = mapped_column(Float, nullable=True)
     documented_wagons: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    documented_tons: Mapped[float | None] = mapped_column(Float, nullable=True)
     sent_wagons: Mapped[int | None] = mapped_column(Integer, nullable=True)
     wagon_balance: Mapped[int | None] = mapped_column(Integer, nullable=True)
     wagon_coverage_percent: Mapped[float | None] = mapped_column(Float, nullable=True)

@@ -6,8 +6,7 @@ from sqlalchemy.orm import selectinload
 from app.db.models import ParsedSheet, RawExtractedRow, ReportFile, ReportPackage
 from app.parsers.operational_excel_parser import parse_excel
 from app.parsers.pdf_parser import parse_pdf
-from app.services.chain_metrics_service import build_daily_chain_metrics
-from app.services.product_wagon_service import build_product_wagon_metrics
+from app.services.structured_report_service import rebuild_structured_metrics
 
 
 def parse_package(db: Session, package: ReportPackage) -> None:
@@ -42,10 +41,9 @@ def parse_package(db: Session, package: ReportPackage) -> None:
             report_file.status = "parsed"
 
         package.status = "parsed"
-        package.comment = "Комплект обработан, сырой слой сохранен."
+        package.comment = "Комплект обработан: сырой слой сохранен, структурные показатели рассчитаны."
         db.commit()
-        build_daily_chain_metrics(db, package)
-        build_product_wagon_metrics(db, package)
+        rebuild_structured_metrics(db, package)
     except Exception as exc:
         db.rollback()
         package.status = "error"

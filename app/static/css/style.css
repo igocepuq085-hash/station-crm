@@ -321,6 +321,7 @@ body {
 .status-chip-дефицит-продукта,
 .status-chip-дефицит-подходящих-вагонов,
 .status-chip-много-негодных,
+.status-chip-отстает-погрузка,
 .status-chip-отстает-оформление,
 .status-chip-отстает-отправление {
   color: var(--warn);

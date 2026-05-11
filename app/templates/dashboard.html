@@ -140,7 +140,7 @@
       {% endif %}
     </div>
     <div class="chart-card">
-      <h2 class="section-title">Погружено против оформлено</h2>
+      <h2 class="section-title">Факт налива против оформления</h2>
       {% if charts.loaded_documented.has_data %}
         <canvas id="loadedDocumentedChart"></canvas>
       {% else %}
@@ -156,7 +156,7 @@
       {% endif %}
     </div>
     <div class="chart-card">
-      <h2 class="section-title">Продуктово-вагонная матрица</h2>
+      <h2 class="section-title">План, факт и остатки по продуктам</h2>
       {% if charts.product_matrix.has_data %}
         <canvas id="productMatrixChart"></canvas>
       {% else %}
@@ -175,8 +175,8 @@
 
   <div class="section-block mb-4">
     <div class="d-flex flex-wrap justify-content-between gap-3 align-items-center mb-3">
-      <h2 class="section-title mb-0">Продуктово-вагонная аналитика</h2>
-      <span class="text-secondary">Не общий парк, а соответствие продукта и вагонов</span>
+      <h2 class="section-title mb-0">Продуктовый отчет</h2>
+      <span class="text-secondary">План, факт налива, остатки на ЗСК и оформление по каждому продукту</span>
     </div>
     <div class="table-responsive product-table-wrap">
       <table class="table align-middle product-table">
@@ -184,14 +184,12 @@
           <tr>
             <th>Продукт</th>
             <th>Группа</th>
-            <th class="text-end">План</th>
-            <th class="text-end">Продукт на ЗСК</th>
-            <th class="text-end">Есть вагонов</th>
-            <th class="text-end">Годные</th>
-            <th class="text-end">Погружено</th>
-            <th class="text-end">Оформлено</th>
-            <th class="text-end">Отправлено</th>
-            <th class="text-end">Баланс</th>
+            <th class="text-end">План, т</th>
+            <th class="text-end">Факт налива, т</th>
+            <th class="text-end">Остаток ЗСК, т</th>
+            <th class="text-end">Оформлено, ваг</th>
+            <th class="text-end">Оформлено, т</th>
+            <th class="text-end">Отправлено, ваг</th>
             <th>Статус</th>
           </tr>
         </thead>
@@ -200,18 +198,16 @@
             <tr>
               <td><strong>{{ metric.product }}</strong></td>
               <td>{{ metric.wagon_group }}</td>
-              <td class="text-end">{{ metric.planned_loading_wagons if metric.planned_loading_wagons is not none else "нет данных" }}</td>
-              <td class="text-end">{{ metric.product_stock_tons|int if metric.product_stock_tons is not none else "нет данных" }}</td>
-              <td class="text-end">{{ metric.available_wagons_total if metric.available_wagons_total is not none else "нет данных" }}</td>
-              <td class="text-end">{{ metric.available_wagons_good if metric.available_wagons_good is not none else "нет данных" }}</td>
-              <td class="text-end">{{ metric.loaded_wagons if metric.loaded_wagons is not none else "нет данных" }}</td>
+              <td class="text-end">{{ metric.planned_loading_tons|round|int if metric.planned_loading_tons is not none else "нет данных" }}</td>
+              <td class="text-end">{{ metric.loaded_tons|round|int if metric.loaded_tons is not none else "нет данных" }}</td>
+              <td class="text-end">{{ metric.product_stock_tons|round|int if metric.product_stock_tons is not none else "нет данных" }}</td>
               <td class="text-end">{{ metric.documented_wagons if metric.documented_wagons is not none else "нет данных" }}</td>
+              <td class="text-end">{{ metric.documented_tons|round|int if metric.documented_tons is defined and metric.documented_tons is not none else "нет данных" }}</td>
               <td class="text-end">{{ metric.sent_wagons if metric.sent_wagons is not none else "нет данных" }}</td>
-              <td class="text-end">{{ metric.wagon_balance if metric.wagon_balance is not none else "нет данных" }}</td>
               <td><span class="status-chip status-chip-{{ metric.main_limitation|replace(' ', '-') }}">{{ metric.main_limitation }}</span></td>
             </tr>
           {% else %}
-            <tr><td colspan="11" class="text-secondary">Продуктовые метрики пока не рассчитаны.</td></tr>
+            <tr><td colspan="9" class="text-secondary">Продуктовые метрики пока не рассчитаны.</td></tr>
           {% endfor %}
         </tbody>
       </table>
@@ -409,8 +405,8 @@
     data: {
       labels: charts.loaded_documented.labels,
       datasets: [
-        { label: "Погружено", data: charts.loaded_documented.loaded, backgroundColor: palette.green, borderRadius: 6 },
-        { label: "Оформлено", data: charts.loaded_documented.documented, backgroundColor: palette.yellow, borderRadius: 6 }
+        { label: "Факт налива, т", data: charts.loaded_documented.loaded, backgroundColor: palette.green, borderRadius: 6 },
+        { label: "Оформлено, т", data: charts.loaded_documented.documented, backgroundColor: palette.yellow, borderRadius: 6 }
       ]
     },
     options: {
@@ -442,9 +438,9 @@
     data: {
       labels: charts.product_matrix.labels,
       datasets: [
-        { label: "План", data: charts.product_matrix.planned, backgroundColor: palette.softBlue, borderColor: palette.blue, borderWidth: 1, borderRadius: 6 },
-        { label: "Годные", data: charts.product_matrix.good, backgroundColor: palette.softGreen, borderColor: palette.green, borderWidth: 1, borderRadius: 6 },
-        { label: "Факт погрузки", data: charts.product_matrix.loaded, backgroundColor: palette.softYellow, borderColor: palette.yellow, borderWidth: 1, borderRadius: 6 }
+        { label: "План, т", data: charts.product_matrix.planned, backgroundColor: palette.softBlue, borderColor: palette.blue, borderWidth: 1, borderRadius: 6 },
+        { label: "Остаток ЗСК, т", data: charts.product_matrix.good, backgroundColor: palette.softGreen, borderColor: palette.green, borderWidth: 1, borderRadius: 6 },
+        { label: "Факт налива, т", data: charts.product_matrix.loaded, backgroundColor: palette.softYellow, borderColor: palette.yellow, borderWidth: 1, borderRadius: 6 }
       ]
     },
     options: {

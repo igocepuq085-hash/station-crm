@@ -48,6 +48,8 @@ def _build_completeness(files: list[ReportFile]) -> dict:
 def _safe_ratio(numerator: int | None, denominator: int | None) -> float | None:
     if numerator is None or denominator in (None, 0):
         return None
+    if numerator > denominator * 1.2:
+        return None
     return round(numerator / denominator * 100, 1)
 
 
@@ -68,7 +70,7 @@ def _build_chain_view(chain_metric: DailyChainMetric | None, ai_metrics: list[AI
         ("Отправлено в Сургут", values["sent_surgut"]),
     ]
     ratios = {
-        "throughput": _safe_ratio(values["sent_surgut"], values["wagons_in_surgut"]),
+        "throughput": _safe_ratio(values["sent_surgut"], values["arrived_prom"]),
         "loading": _safe_ratio(values["loaded_wagons"], values["processed_prom"]),
         "documentation": _safe_ratio(values["documented_wagons"], values["loaded_wagons"]),
         "dispatch": _safe_ratio(values["sent_surgut"], values["documented_wagons"]),
@@ -81,7 +83,7 @@ def _build_chain_view(chain_metric: DailyChainMetric | None, ai_metrics: list[AI
             {
                 "label": "Сквозной коэффициент обработки",
                 "value": _format_ratio(ratios["throughput"]),
-                "hint": "отправлено / вагоны в Сургуте",
+                "hint": "отправлено / прибыло на Промышленную",
             },
             {
                 "label": "Коэффициент погрузки",
@@ -111,6 +113,10 @@ def _ai_value(ai_metrics: list[AIExtractedMetric], metric_group: str, metric_key
         if shift_type is not None and metric.shift_type != shift_type:
             continue
         if metric.metric_value is not None:
+            if metric.confidence is not None and metric.confidence < 0.6:
+                continue
+            if metric_group in {"chain_metrics", "shift_metrics"} and metric.metric_value == 0:
+                continue
             return int(metric.metric_value)
     return None
 
@@ -162,6 +168,7 @@ def _merge_ai_product_metrics(product_metrics: list[ProductWagonMetric], ai_metr
             "loaded_wagons": _ai_value(ai_metrics, "product_metrics", "loaded_wagons", product=product),
             "loaded_tons": _ai_value(ai_metrics, "product_metrics", "loaded_tons", product=product),
             "documented_wagons": _ai_value(ai_metrics, "product_metrics", "documented_wagons", product=product),
+            "documented_tons": _ai_value(ai_metrics, "product_metrics", "documented_tons", product=product),
             "sent_wagons": _ai_value(ai_metrics, "product_metrics", "sent_wagons", product=product),
         }
         limitation_metric = next(
@@ -192,6 +199,7 @@ def _merge_ai_product_metrics(product_metrics: list[ProductWagonMetric], ai_metr
                     loaded_wagons=values["loaded_wagons"],
                     loaded_tons=values["loaded_tons"],
                     documented_wagons=values["documented_wagons"],
+                    documented_tons=values["documented_tons"],
                     sent_wagons=values["sent_wagons"],
                     wagon_balance=(good - planned) if good is not None and planned is not None else None,
                     wagon_coverage_percent=round(good / planned * 100, 1) if good is not None and planned not in (None, 0) else None,
@@ -277,9 +285,13 @@ def _build_chart_data(
             value is not None
             for value in (
                 metric.planned_loading_wagons,
+                metric.planned_loading_tons,
+                metric.product_stock_tons,
                 metric.available_wagons_good,
                 metric.loaded_wagons,
+                metric.loaded_tons,
                 metric.documented_wagons,
+                getattr(metric, "documented_tons", None),
                 metric.sent_wagons,
             )
         )
@@ -318,12 +330,22 @@ def _build_chart_data(
         "loaded_documented": {
             "has_data": bool(product_labels)
             and (
-                _non_empty_numbers([metric.loaded_wagons for metric in visible_product_metrics])
+                _non_empty_numbers([metric.loaded_tons for metric in visible_product_metrics])
+                or _non_empty_numbers([getattr(metric, "documented_tons", None) for metric in visible_product_metrics])
+                or _non_empty_numbers([metric.loaded_wagons for metric in visible_product_metrics])
                 or _non_empty_numbers([metric.documented_wagons for metric in visible_product_metrics])
             ),
             "labels": product_labels,
-            "loaded": [metric.loaded_wagons or 0 for metric in visible_product_metrics],
-            "documented": [metric.documented_wagons or 0 for metric in visible_product_metrics],
+            "loaded": [(metric.loaded_tons if metric.loaded_tons is not None else metric.loaded_wagons) or 0 for metric in visible_product_metrics],
+            "documented": [
+                (
+                    getattr(metric, "documented_tons", None)
+                    if getattr(metric, "documented_tons", None) is not None
+                    else metric.documented_wagons
+                )
+                or 0
+                for metric in visible_product_metrics
+            ],
         },
         "park_structure": {
             "has_data": _non_empty_numbers(park_values),
@@ -333,14 +355,17 @@ def _build_chart_data(
         "product_matrix": {
             "has_data": bool(product_labels)
             and (
-                _non_empty_numbers([metric.planned_loading_wagons for metric in visible_product_metrics])
+                _non_empty_numbers([metric.planned_loading_tons for metric in visible_product_metrics])
+                or _non_empty_numbers([metric.product_stock_tons for metric in visible_product_metrics])
+                or _non_empty_numbers([metric.loaded_tons for metric in visible_product_metrics])
+                or _non_empty_numbers([metric.planned_loading_wagons for metric in visible_product_metrics])
                 or _non_empty_numbers([metric.available_wagons_good for metric in visible_product_metrics])
                 or _non_empty_numbers([metric.loaded_wagons for metric in visible_product_metrics])
             ),
             "labels": product_labels,
-            "planned": [metric.planned_loading_wagons or 0 for metric in visible_product_metrics],
-            "good": [metric.available_wagons_good or 0 for metric in visible_product_metrics],
-            "loaded": [metric.loaded_wagons or 0 for metric in visible_product_metrics],
+            "planned": [(metric.planned_loading_tons if metric.planned_loading_tons is not None else metric.planned_loading_wagons) or 0 for metric in visible_product_metrics],
+            "good": [(metric.product_stock_tons if metric.product_stock_tons is not None else metric.available_wagons_good) or 0 for metric in visible_product_metrics],
+            "loaded": [(metric.loaded_tons if metric.loaded_tons is not None else metric.loaded_wagons) or 0 for metric in visible_product_metrics],
         },
         "reasons": {
             "has_data": bool(top_reasons),
@@ -374,8 +399,15 @@ def get_dashboard_data(db: Session, package_id: int) -> dict:
     chain_metric = db.scalars(
         select(DailyChainMetric)
         .where(DailyChainMetric.package_id == package_id)
+        .where(DailyChainMetric.shift_type == "сутки")
         .order_by(DailyChainMetric.created_at.desc())
     ).first()
+    if chain_metric is None:
+        chain_metric = db.scalars(
+            select(DailyChainMetric)
+            .where(DailyChainMetric.package_id == package_id)
+            .order_by(DailyChainMetric.created_at.desc())
+        ).first()
     all_chain_metrics = db.scalars(
         select(DailyChainMetric)
         .where(DailyChainMetric.package_id == package_id)
