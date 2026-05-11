@@ -11,7 +11,12 @@
         <h1 class="page-title mb-2">Тренды станции</h1>
         <div class="text-secondary">Дни, коэффициенты, парк и продуктовая погрузка.</div>
       </div>
-      <a class="btn btn-outline-light" href="/upload">Загрузить отчеты</a>
+      <div class="d-flex flex-wrap gap-2">
+        {% if latest_package %}
+          <a class="btn btn-outline-light" href="/dashboard/{{ latest_package.id }}">Вернуться в дашборд #{{ latest_package.id }}</a>
+        {% endif %}
+        <a class="btn btn-light" href="/upload">Загрузить отчеты</a>
+      </div>
     </div>
   </div>
 </section>

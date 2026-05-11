@@ -62,6 +62,7 @@ def get_trends_data(
     shift: str = "all",
 ) -> dict:
     packages = db.scalars(select(ReportPackage).order_by(ReportPackage.created_at)).all()
+    latest_package = packages[-1] if packages else None
     filtered_packages = []
     for package in packages:
         current_date = _package_date(package)
@@ -87,6 +88,7 @@ def get_trends_data(
                 "shift": shift,
             },
             "products": products,
+            "latest_package": latest_package,
             "has_enough_dates": False,
             "charts": {
                 "movement": _empty_chart(chart_labels),
@@ -186,6 +188,7 @@ def get_trends_data(
             "shift": shift,
         },
         "products": products,
+        "latest_package": latest_package,
         "has_enough_dates": has_enough_dates,
         "charts": {
             "movement": {

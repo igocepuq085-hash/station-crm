@@ -297,6 +297,55 @@ def _build_summary_cards(
     ]
 
 
+def _build_source_tables(
+    package_id: int,
+    sheets: list[ParsedSheet],
+    metric_sources: list[RawMetric],
+    raw_rows: list[RawExtractedRow],
+) -> list[dict]:
+    sheet_names = {sheet.sheet_name for sheet in sheets}
+    metrics_by_sheet: dict[str, list[RawMetric]] = {}
+    for metric in metric_sources:
+        if metric.sheet_name:
+            metrics_by_sheet.setdefault(metric.sheet_name, []).append(metric)
+
+    pdf_rows = [row for row in raw_rows if row.file.detected_report_type == "scanned_pdf" or row.file.file_type == "pdf"]
+    cards = [
+        ("Парк вагонов", "Сводка ПРОМ", "Парк всего, годные, негодные, груженые", "park_total"),
+        ("Обмен поездов", "Отчет НС", "Прибытие и отправление по сменам", "arrived_prom"),
+        ("Наличие в Сургуте", "Наличие в Сургуте", "Вагоны в Сургуте и не включенные в сводку", "wagons_in_surgut"),
+        ("План / факт налива", "Сводка диспетчера ДО", "План, факт и остатки продукта", "loaded_tons"),
+        ("Оформление", "Приложение №3а", "Оформлено за сутки в вагонах и тоннах", "documented_wagons"),
+    ]
+    result = []
+    for title, sheet_name, description, metric_key in cards:
+        sheet_metrics = metrics_by_sheet.get(sheet_name, [])
+        result.append(
+            {
+                "title": title,
+                "sheet_name": sheet_name,
+                "description": description,
+                "metric_count": len(sheet_metrics),
+                "is_available": sheet_name in sheet_names or bool(sheet_metrics),
+                "href": f"/raw/{package_id}?sheet_name={sheet_name}",
+                "anchor_metric_key": metric_key,
+            }
+        )
+
+    result.append(
+        {
+            "title": "PDF / скан",
+            "sheet_name": "PDF",
+            "description": "Текст PDF, если он извлекся; для сканов показывается статус OCR",
+            "metric_count": len(pdf_rows),
+            "is_available": bool(pdf_rows),
+            "href": f"/raw/{package_id}?keyword=PDF_STATUS" if pdf_rows else f"/raw/{package_id}",
+            "anchor_metric_key": "PDF_STATUS",
+        }
+    )
+    return result
+
+
 def _build_chart_data(
     chain_metric: DailyChainMetric | None,
     product_metrics: list[ProductWagonMetric],
@@ -510,6 +559,7 @@ def get_dashboard_data(db: Session, package_id: int) -> dict:
         "chain": _build_chain_view(chain_metric, ai_metrics),
         "summary_cards": _build_summary_cards(chain_metric, product_metrics_view, park_values),
         "park_values": park_values,
+        "source_tables": _build_source_tables(package_id, sheets, metric_sources, raw_rows),
         "metric_sources": metric_sources,
         "product_metrics": product_metrics_view,
         "false_coverage_warnings": false_park_coverage_warnings(product_metrics_view),
@@ -557,6 +607,19 @@ def get_raw_data(
         rows_query.order_by(RawExtractedRow.file_id, RawExtractedRow.sheet_name, RawExtractedRow.row_number)
     ).all()
 
+    metric_query = (
+        select(RawMetric)
+        .options(selectinload(RawMetric.file))
+        .where(RawMetric.package_id == package_id)
+    )
+    if sheet_name:
+        metric_query = metric_query.where(RawMetric.sheet_name == sheet_name)
+    if keyword:
+        metric_query = metric_query.where(RawMetric.metric_key.ilike(f"%{keyword}%") | RawMetric.metric_label.ilike(f"%{keyword}%"))
+    metric_sources = db.scalars(
+        metric_query.order_by(RawMetric.file_id, RawMetric.sheet_name, RawMetric.row_number, RawMetric.metric_key)
+    ).all()
+
     unique_keywords = sorted(
         {
             item.strip()
@@ -576,6 +639,7 @@ def get_raw_data(
         "completeness": _build_completeness(files),
         "sheets": sheets,
         "raw_rows": raw_rows,
+        "metric_sources": metric_sources,
         "unique_keywords": unique_keywords,
         "sheet_names": sheet_names,
         "selected_keyword": keyword or "",

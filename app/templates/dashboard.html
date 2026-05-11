@@ -53,6 +53,23 @@
     </div>
   </div>
 
+  <div class="section-block mb-4">
+    <div class="d-flex flex-wrap justify-content-between gap-3 align-items-center mb-3">
+      <h2 class="section-title mb-0">Провалиться в таблицы</h2>
+      <span class="text-secondary">Откройте исходный лист и строки, из которых рассчитан показатель</span>
+    </div>
+    <div class="source-table-grid">
+      {% for item in source_tables %}
+        <a class="source-table-card {% if not item.is_available %}is-muted{% endif %}" href="{{ item.href }}">
+          <span>{{ item.title }}</span>
+          <strong>{{ item.sheet_name }}</strong>
+          <small>{{ item.description }}</small>
+          <em>{{ item.metric_count }} найденных строк</em>
+        </a>
+      {% endfor %}
+    </div>
+  </div>
+
   <div class="section-block ai-extraction-block ai-extraction-compact mb-4">
     <div class="d-flex flex-wrap justify-content-between gap-3 align-items-start">
       <div>

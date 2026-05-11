@@ -23,6 +23,11 @@
 </section>
 
 <section class="container-fluid px-4 py-4">
+  <div class="d-flex flex-wrap gap-2 mb-4">
+    <a class="btn btn-outline-secondary" href="/dashboard/{{ package.id }}">← Вернуться в дашборд</a>
+    <a class="btn btn-outline-secondary" href="/trends?from_dashboard={{ package.id }}">Тренды</a>
+  </div>
+
   <div class="section-block mb-4">
     <h2 class="section-title">Фильтры</h2>
     <form method="get" class="row g-3 align-items-end">
@@ -71,10 +76,10 @@
         <h2 class="section-title">Листы Excel</h2>
         <div class="raw-sheet-list">
           {% for sheet in sheets %}
-            <div class="raw-sheet">
+            <a class="raw-sheet raw-sheet-link" href="/raw/{{ package.id }}?sheet_name={{ sheet.sheet_name }}">
               <strong>{{ sheet.sheet_name }}</strong>
               <span>{{ sheet.source_type }} · {{ sheet.rows_count }} x {{ sheet.columns_count }}</span>
-            </div>
+            </a>
           {% else %}
             <div class="empty-state">Листы не найдены.</div>
           {% endfor %}
@@ -83,6 +88,41 @@
     </div>
 
     <div class="col-xl-8">
+      <div class="section-block mb-4">
+        <div class="d-flex justify-content-between gap-3 align-items-center mb-3">
+          <h2 class="section-title mb-0">Рассчитанные показатели из этой таблицы</h2>
+          <span class="text-secondary">{{ metric_sources|length }} показателей</span>
+        </div>
+        <div class="table-responsive">
+          <table class="table align-middle source-metric-table">
+            <thead>
+              <tr>
+                <th>Показатель</th>
+                <th>Продукт</th>
+                <th>Значение</th>
+                <th>Источник</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for metric in metric_sources %}
+                <tr>
+                  <td><strong>{{ metric.metric_label }}</strong><br><small>{{ metric.metric_key }}</small></td>
+                  <td>{{ metric.product or "—" }}</td>
+                  <td>{{ metric.metric_value|round|int if metric.metric_value is not none else "нет данных" }} {{ metric.unit or "" }}</td>
+                  <td>
+                    {{ metric.file.original_filename }}
+                    {% if metric.sheet_name %}<br><small>{{ metric.sheet_name }}</small>{% endif %}
+                    {% if metric.row_number %}<br><small>строка {{ metric.row_number }}</small>{% endif %}
+                  </td>
+                </tr>
+              {% else %}
+                <tr><td colspan="4" class="text-secondary">По выбранному листу расчетных показателей нет.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       <div class="section-block">
         <div class="d-flex justify-content-between gap-3 align-items-center mb-3">
           <h2 class="section-title mb-0">Найденные строки</h2>
