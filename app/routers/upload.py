@@ -27,18 +27,19 @@ async def upload_reports(
     operational_file: UploadFile = File(...),
     wagons_file: UploadFile = File(...),
     pdf_file: UploadFile = File(...),
-    report_date: date | None = Form(default=None),
+    report_date: str = Form(default=""),
     comment: str | None = Form(default=None),
     db: Session = Depends(get_db),
 ):
     require_auth(request)
+    parsed_report_date = date.fromisoformat(report_date) if report_date else None
     try:
         package = await create_report_package(
             db,
             operational_file,
             wagons_file,
             pdf_file,
-            report_date=report_date,
+            report_date=parsed_report_date,
             comment=comment,
         )
     except ValueError as exc:
