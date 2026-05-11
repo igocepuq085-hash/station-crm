@@ -10,7 +10,7 @@ load_dotenv()
 class Settings:
     app_name: str = "station-crm"
     base_dir: Path = Path(__file__).resolve().parents[2]
-    storage_dir: Path = base_dir / "storage"
+    storage_dir: Path = Path(os.getenv("STORAGE_PATH", base_dir / "storage"))
     upload_dir: Path = storage_dir / "uploads"
     database_url: str = os.getenv("DATABASE_URL") or f"sqlite:///{storage_dir / 'station_crm.db'}"
     templates_dir: str = str(base_dir / "app" / "templates")

@@ -106,6 +106,7 @@ DATABASE_URL=
 APP_SECRET_KEY=change-me
 ADMIN_USERNAME=admin
 ADMIN_PASSWORD=admin
+STORAGE_PATH=storage
 USE_AI_SUMMARY=false
 OPENAI_API_KEY=
 OPENAI_MODEL=gpt-4.1-mini
@@ -115,6 +116,7 @@ OPENAI_MODEL=gpt-4.1-mini
 - `APP_SECRET_KEY` - ключ подписи session-cookie, обязателен для Railway.
 - `ADMIN_USERNAME` - логин администратора.
 - `ADMIN_PASSWORD` - пароль администратора.
+- `STORAGE_PATH` - путь для сохранения загруженных файлов; на Railway с volume используйте `/app/storage`.
 - `USE_AI_SUMMARY` - `true` включает OpenAI-вывод, `false` оставляет rule-based вывод.
 - `OPENAI_API_KEY` - ключ OpenAI API, необязателен.
 - `OPENAI_MODEL` - модель для AI-вывода, по умолчанию `gpt-4.1-mini`.
