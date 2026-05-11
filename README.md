@@ -110,7 +110,7 @@ STORAGE_PATH=storage
 USE_AI_SUMMARY=false
 USE_AI_EXTRACTION=false
 OPENAI_API_KEY=
-OPENAI_MODEL=gpt-5.5
+OPENAI_MODEL=gpt-5.4-nano
 ```
 
 - `DATABASE_URL` - если задан, используется PostgreSQL; если пустой, используется SQLite.
@@ -121,7 +121,7 @@ OPENAI_MODEL=gpt-5.5
 - `USE_AI_SUMMARY` - `true` включает OpenAI-вывод, `false` оставляет rule-based вывод.
 - `USE_AI_EXTRACTION` - `true` включает AI-разбор найденных строк отчета, `false` отключает его.
 - `OPENAI_API_KEY` - ключ OpenAI API, необязателен.
-- `OPENAI_MODEL` - модель для AI-вывода и AI-разбора, по умолчанию `gpt-5.5`.
+- `OPENAI_MODEL` - модель для AI-вывода и AI-разбора, по умолчанию `gpt-5.4-nano`.
 
 ## Структура данных
 
@@ -205,7 +205,7 @@ Dashboard использует Chart.js и показывает:
 OPENAI_API_KEY=
 USE_AI_EXTRACTION=false
 USE_AI_SUMMARY=false
-OPENAI_MODEL=gpt-5.5
+OPENAI_MODEL=gpt-5.4-nano
 ```
 
 Для AI-summary в модель передаются только рассчитанные JSON-показатели: цепочка, коэффициенты, продуктово-вагонные метрики и статусы. Сырые файлы и сырые строки отчетов в OpenAI API не отправляются.

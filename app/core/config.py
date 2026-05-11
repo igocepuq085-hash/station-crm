@@ -19,7 +19,7 @@ class Settings:
     admin_username: str = os.getenv("ADMIN_USERNAME", "admin")
     admin_password: str = os.getenv("ADMIN_PASSWORD", "admin")
     openai_api_key: str | None = os.getenv("OPENAI_API_KEY")
-    openai_model: str = os.getenv("OPENAI_MODEL", "gpt-5.5")
+    openai_model: str = os.getenv("OPENAI_MODEL", "gpt-5.4-nano")
     use_ai_summary: bool = os.getenv("USE_AI_SUMMARY", "false").strip().lower() == "true"
     use_ai_extraction: bool = os.getenv("USE_AI_EXTRACTION", "false").strip().lower() == "true"
 
