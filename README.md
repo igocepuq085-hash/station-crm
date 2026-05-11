@@ -108,8 +108,9 @@ ADMIN_USERNAME=admin
 ADMIN_PASSWORD=admin
 STORAGE_PATH=storage
 USE_AI_SUMMARY=false
+USE_AI_EXTRACTION=false
 OPENAI_API_KEY=
-OPENAI_MODEL=gpt-4.1-mini
+OPENAI_MODEL=gpt-5.5
 ```
 
 - `DATABASE_URL` - если задан, используется PostgreSQL; если пустой, используется SQLite.
@@ -118,8 +119,9 @@ OPENAI_MODEL=gpt-4.1-mini
 - `ADMIN_PASSWORD` - пароль администратора.
 - `STORAGE_PATH` - путь для сохранения загруженных файлов; на Railway с volume используйте `/app/storage`.
 - `USE_AI_SUMMARY` - `true` включает OpenAI-вывод, `false` оставляет rule-based вывод.
+- `USE_AI_EXTRACTION` - `true` включает AI-разбор найденных строк отчета, `false` отключает его.
 - `OPENAI_API_KEY` - ключ OpenAI API, необязателен.
-- `OPENAI_MODEL` - модель для AI-вывода, по умолчанию `gpt-4.1-mini`.
+- `OPENAI_MODEL` - модель для AI-вывода и AI-разбора, по умолчанию `gpt-5.5`.
 
 ## Структура данных
 
@@ -195,15 +197,20 @@ Dashboard использует Chart.js и показывает:
 
 Сервис `app/services/ai_summary_service.py` добавляет необязательную интеграцию с OpenAI API. Если `OPENAI_API_KEY` отсутствует или `USE_AI_SUMMARY=false`, используется rule-based вывод.
 
+Сервис `app/services/ai_extraction_service.py` добавляет необязательный AI-разбор данных из уже сохраненных `raw_extracted_rows`. Если `OPENAI_API_KEY` отсутствует или `USE_AI_EXTRACTION=false`, приложение не падает, а AI-разбор помечается как skipped.
+
 Настройки в `.env`:
 
 ```env
 OPENAI_API_KEY=
+USE_AI_EXTRACTION=false
 USE_AI_SUMMARY=false
-OPENAI_MODEL=gpt-4.1-mini
+OPENAI_MODEL=gpt-5.5
 ```
 
-В модель передаются только рассчитанные JSON-показатели: цепочка, коэффициенты, продуктово-вагонные метрики и статусы. Сырые файлы и сырые строки отчетов в OpenAI API не отправляются.
+Для AI-summary в модель передаются только рассчитанные JSON-показатели: цепочка, коэффициенты, продуктово-вагонные метрики и статусы. Сырые файлы и сырые строки отчетов в OpenAI API не отправляются.
+
+Для AI-extraction в модель передаются только уже найденные строки из `raw_extracted_rows`, без исходных Excel/PDF-файлов. Модель обязана вернуть строгий JSON, не придумывать цифры и указывать `source_rows`.
 
 ## Тренды
 

@@ -39,6 +39,14 @@ class ReportPackage(Base):
         back_populates="package",
         cascade="all, delete-orphan",
     )
+    ai_extraction_runs: Mapped[list["AIExtractionRun"]] = relationship(
+        back_populates="package",
+        cascade="all, delete-orphan",
+    )
+    ai_extracted_metrics: Mapped[list["AIExtractedMetric"]] = relationship(
+        back_populates="package",
+        cascade="all, delete-orphan",
+    )
 
 
 class ReportFile(Base):
@@ -155,3 +163,38 @@ class ProductWagonMetric(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 
     package: Mapped[ReportPackage] = relationship(back_populates="product_wagon_metrics")
+
+
+class AIExtractionRun(Base):
+    __tablename__ = "ai_extraction_runs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    package_id: Mapped[int] = mapped_column(ForeignKey("report_packages.id"), nullable=False)
+    model: Mapped[str] = mapped_column(String(120), nullable=False)
+    status: Mapped[str] = mapped_column(String(50), nullable=False)
+    prompt_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    output_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    error_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+    package: Mapped[ReportPackage] = relationship(back_populates="ai_extraction_runs")
+
+
+class AIExtractedMetric(Base):
+    __tablename__ = "ai_extracted_metrics"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    package_id: Mapped[int] = mapped_column(ForeignKey("report_packages.id"), nullable=False)
+    metric_group: Mapped[str] = mapped_column(String(80), nullable=False)
+    metric_key: Mapped[str] = mapped_column(String(160), nullable=False)
+    metric_value: Mapped[float | None] = mapped_column(Float, nullable=True)
+    unit: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    product: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    product_group: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    shift_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    source_rows_json: Mapped[str] = mapped_column(Text, nullable=False)
+    raw_json: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+    package: Mapped[ReportPackage] = relationship(back_populates="ai_extracted_metrics")

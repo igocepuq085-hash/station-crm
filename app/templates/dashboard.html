@@ -37,6 +37,37 @@
     </div>
   {% endif %}
 
+  <div class="section-block ai-extraction-block mb-4">
+    <div class="d-flex flex-wrap justify-content-between gap-3 align-items-start">
+      <div>
+        <h2 class="section-title mb-2">AI-разбор отчета</h2>
+        <div class="text-secondary">
+          AI использует только найденные строки отчетов и не должен подставлять отсутствующие цифры.
+        </div>
+      </div>
+      <form method="post" action="/dashboard/{{ package.id }}/ai-extract">
+        <button class="btn btn-primary" type="submit">Запустить AI-разбор</button>
+      </form>
+    </div>
+    <div class="ai-extraction-grid mt-3">
+      <div>
+        <span>Статус</span>
+        <strong>{{ ai_extraction.status }}</strong>
+      </div>
+      <div>
+        <span>Модель</span>
+        <strong>{{ ai_extraction.model or "не запускался" }}</strong>
+      </div>
+      <div>
+        <span>Извлечено показателей</span>
+        <strong>{{ ai_extraction.metric_count }}</strong>
+      </div>
+    </div>
+    {% if ai_extraction.error_text %}
+      <div class="alert alert-warning mt-3 mb-0">{{ ai_extraction.error_text }}</div>
+    {% endif %}
+  </div>
+
   <div class="kpi-grid mb-4">
     {% for kpi in chain.kpis %}
       <div class="kpi-card {% if kpi.value == 'нет данных' %}muted{% endif %}">

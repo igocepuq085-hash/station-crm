@@ -1,11 +1,15 @@
 from collections import Counter
+import json
 import re
+from types import SimpleNamespace
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.db.models import (
     DailyChainMetric,
+    AIExtractedMetric,
+    AIExtractionRun,
     ParsedSheet,
     ProductWagonMetric,
     RawExtractedRow,
@@ -53,37 +57,22 @@ def _format_ratio(value: float | None) -> str:
     return f"{value}%"
 
 
-def _build_chain_view(chain_metric: DailyChainMetric | None) -> dict:
-    if chain_metric is None:
-        steps = [
-            ("Сургут", None),
-            ("Прибыло на Промышленную", None),
-            ("Обработано", None),
-            ("Погружено", None),
-            ("Оформлено", None),
-            ("Отправлено в Сургут", None),
-        ]
-        ratios = {
-            "throughput": None,
-            "loading": None,
-            "documentation": None,
-            "dispatch": None,
-        }
-    else:
-        steps = [
-            ("Сургут", chain_metric.wagons_in_surgut),
-            ("Прибыло на Промышленную", chain_metric.arrived_prom),
-            ("Обработано", chain_metric.processed_prom),
-            ("Погружено", chain_metric.loaded_wagons),
-            ("Оформлено", chain_metric.documented_wagons),
-            ("Отправлено в Сургут", chain_metric.sent_surgut),
-        ]
-        ratios = {
-            "throughput": _safe_ratio(chain_metric.sent_surgut, chain_metric.wagons_in_surgut),
-            "loading": _safe_ratio(chain_metric.loaded_wagons, chain_metric.processed_prom),
-            "documentation": _safe_ratio(chain_metric.documented_wagons, chain_metric.loaded_wagons),
-            "dispatch": _safe_ratio(chain_metric.sent_surgut, chain_metric.documented_wagons),
-        }
+def _build_chain_view(chain_metric: DailyChainMetric | None, ai_metrics: list[AIExtractedMetric] | None = None) -> dict:
+    values = _chain_values(chain_metric, ai_metrics or [])
+    steps = [
+        ("Сургут", values["wagons_in_surgut"]),
+        ("Прибыло на Промышленную", values["arrived_prom"]),
+        ("Обработано", values["processed_prom"]),
+        ("Погружено", values["loaded_wagons"]),
+        ("Оформлено", values["documented_wagons"]),
+        ("Отправлено в Сургут", values["sent_surgut"]),
+    ]
+    ratios = {
+        "throughput": _safe_ratio(values["sent_surgut"], values["wagons_in_surgut"]),
+        "loading": _safe_ratio(values["loaded_wagons"], values["processed_prom"]),
+        "documentation": _safe_ratio(values["documented_wagons"], values["loaded_wagons"]),
+        "dispatch": _safe_ratio(values["sent_surgut"], values["documented_wagons"]),
+    }
 
     return {
         "metric": chain_metric,
@@ -113,6 +102,121 @@ def _build_chain_view(chain_metric: DailyChainMetric | None) -> dict:
     }
 
 
+def _ai_value(ai_metrics: list[AIExtractedMetric], metric_group: str, metric_key: str, *, product: str | None = None, shift_type: str | None = None) -> int | None:
+    for metric in ai_metrics:
+        if metric.metric_group != metric_group or metric.metric_key != metric_key:
+            continue
+        if product is not None and metric.product != product:
+            continue
+        if shift_type is not None and metric.shift_type != shift_type:
+            continue
+        if metric.metric_value is not None:
+            return int(metric.metric_value)
+    return None
+
+
+def _chain_values(chain_metric: DailyChainMetric | None, ai_metrics: list[AIExtractedMetric]) -> dict[str, int | None]:
+    values = {
+        "wagons_in_surgut": chain_metric.wagons_in_surgut if chain_metric else None,
+        "arrived_prom": chain_metric.arrived_prom if chain_metric else None,
+        "processed_prom": chain_metric.processed_prom if chain_metric else None,
+        "loaded_wagons": chain_metric.loaded_wagons if chain_metric else None,
+        "documented_wagons": chain_metric.documented_wagons if chain_metric else None,
+        "sent_surgut": chain_metric.sent_surgut if chain_metric else None,
+    }
+    for key, value in values.items():
+        if value is None:
+            values[key] = _ai_value(ai_metrics, "chain_metrics", key)
+    return values
+
+
+def _ai_string(metric: AIExtractedMetric) -> str | None:
+    try:
+        raw = json.loads(metric.raw_json)
+    except Exception:
+        return None
+    if isinstance(raw, dict):
+        value = raw.get("value")
+        if isinstance(value, str):
+            return value
+        nested = raw.get("raw")
+        if isinstance(nested, dict) and isinstance(nested.get("value"), str):
+            return nested["value"]
+    return None
+
+
+def _merge_ai_product_metrics(product_metrics: list[ProductWagonMetric], ai_metrics: list[AIExtractedMetric]) -> list:
+    by_product = {metric.product: metric for metric in product_metrics}
+    ai_products = sorted({metric.product for metric in ai_metrics if metric.metric_group == "product_metrics" and metric.product})
+    merged = list(product_metrics)
+    for product in ai_products:
+        existing = by_product.get(product)
+        product_group = next((metric.product_group for metric in ai_metrics if metric.product == product and metric.product_group), None)
+        values = {
+            "planned_loading_wagons": _ai_value(ai_metrics, "product_metrics", "planned_loading_wagons", product=product),
+            "planned_loading_tons": _ai_value(ai_metrics, "product_metrics", "planned_loading_tons", product=product),
+            "product_stock_tons": _ai_value(ai_metrics, "product_metrics", "product_stock_tons", product=product),
+            "available_wagons_total": _ai_value(ai_metrics, "product_metrics", "available_wagons_total", product=product),
+            "available_wagons_good": _ai_value(ai_metrics, "product_metrics", "available_wagons_good", product=product),
+            "available_wagons_bad": _ai_value(ai_metrics, "product_metrics", "available_wagons_bad", product=product),
+            "loaded_wagons": _ai_value(ai_metrics, "product_metrics", "loaded_wagons", product=product),
+            "loaded_tons": _ai_value(ai_metrics, "product_metrics", "loaded_tons", product=product),
+            "documented_wagons": _ai_value(ai_metrics, "product_metrics", "documented_wagons", product=product),
+            "sent_wagons": _ai_value(ai_metrics, "product_metrics", "sent_wagons", product=product),
+        }
+        limitation_metric = next(
+            (metric for metric in ai_metrics if metric.metric_group == "product_metrics" and metric.product == product and metric.metric_key == "main_limitation"),
+            None,
+        )
+        main_limitation = _ai_string(limitation_metric) if limitation_metric else None
+
+        if existing:
+            for key, value in values.items():
+                if getattr(existing, key, None) is None and value is not None:
+                    setattr(existing, key, value)
+            if existing.main_limitation == "нет данных" and main_limitation:
+                existing.main_limitation = main_limitation
+        else:
+            planned = values["planned_loading_wagons"]
+            good = values["available_wagons_good"]
+            merged.append(
+                SimpleNamespace(
+                    product=product,
+                    wagon_group=product_group or "AI",
+                    planned_loading_wagons=planned,
+                    planned_loading_tons=values["planned_loading_tons"],
+                    product_stock_tons=values["product_stock_tons"],
+                    available_wagons_total=values["available_wagons_total"],
+                    available_wagons_good=good,
+                    available_wagons_bad=values["available_wagons_bad"],
+                    loaded_wagons=values["loaded_wagons"],
+                    loaded_tons=values["loaded_tons"],
+                    documented_wagons=values["documented_wagons"],
+                    sent_wagons=values["sent_wagons"],
+                    wagon_balance=(good - planned) if good is not None and planned is not None else None,
+                    wagon_coverage_percent=round(good / planned * 100, 1) if good is not None and planned not in (None, 0) else None,
+                    main_limitation=main_limitation or "нет данных",
+                )
+            )
+    return merged
+
+
+def _ai_extraction_view(run: AIExtractionRun | None, metric_count: int) -> dict:
+    if run is None:
+        return {
+            "status": "not_started",
+            "model": None,
+            "metric_count": metric_count,
+            "error_text": None,
+        }
+    return {
+        "status": run.status,
+        "model": run.model,
+        "metric_count": metric_count,
+        "error_text": run.error_text,
+    }
+
+
 def _extract_row_value(rows: list[RawExtractedRow], phrases: tuple[str, ...]) -> int | None:
     for row in rows:
         text = row.row_text.casefold()
@@ -136,33 +240,33 @@ def _build_chart_data(
     product_metrics: list[ProductWagonMetric],
     raw_rows: list[RawExtractedRow],
     all_chain_metrics: list[DailyChainMetric],
+    ai_metrics: list[AIExtractedMetric],
 ) -> dict:
-    funnel_values = []
-    if chain_metric is not None:
-        funnel_values = [
-            chain_metric.wagons_in_surgut,
-            chain_metric.arrived_prom,
-            chain_metric.processed_prom,
-            chain_metric.loaded_wagons,
-            chain_metric.documented_wagons,
-            chain_metric.sent_surgut,
-        ]
+    chain_values = _chain_values(chain_metric, ai_metrics)
+    funnel_values = [
+        chain_values["wagons_in_surgut"],
+        chain_values["arrived_prom"],
+        chain_values["processed_prom"],
+        chain_values["loaded_wagons"],
+        chain_values["documented_wagons"],
+        chain_values["sent_surgut"],
+    ]
 
     shift_by_type = {metric.shift_type: metric for metric in all_chain_metrics if metric.shift_type}
     day_metric = shift_by_type.get("day")
     night_metric = shift_by_type.get("night")
     shift_values = {
         "day": [
-            day_metric.arrived_prom if day_metric else None,
-            day_metric.loaded_wagons if day_metric else None,
-            day_metric.documented_wagons if day_metric else None,
-            day_metric.sent_surgut if day_metric else None,
+            (day_metric.arrived_prom if day_metric else None) or _ai_value(ai_metrics, "shift_metrics", "arrived_prom", shift_type="day"),
+            (day_metric.loaded_wagons if day_metric else None) or _ai_value(ai_metrics, "shift_metrics", "loaded_wagons", shift_type="day"),
+            (day_metric.documented_wagons if day_metric else None) or _ai_value(ai_metrics, "shift_metrics", "documented_wagons", shift_type="day"),
+            (day_metric.sent_surgut if day_metric else None) or _ai_value(ai_metrics, "shift_metrics", "sent_surgut", shift_type="day"),
         ],
         "night": [
-            night_metric.arrived_prom if night_metric else None,
-            night_metric.loaded_wagons if night_metric else None,
-            night_metric.documented_wagons if night_metric else None,
-            night_metric.sent_surgut if night_metric else None,
+            (night_metric.arrived_prom if night_metric else None) or _ai_value(ai_metrics, "shift_metrics", "arrived_prom", shift_type="night"),
+            (night_metric.loaded_wagons if night_metric else None) or _ai_value(ai_metrics, "shift_metrics", "loaded_wagons", shift_type="night"),
+            (night_metric.documented_wagons if night_metric else None) or _ai_value(ai_metrics, "shift_metrics", "documented_wagons", shift_type="night"),
+            (night_metric.sent_surgut if night_metric else None) or _ai_value(ai_metrics, "shift_metrics", "sent_surgut", shift_type="night"),
         ],
     }
 
@@ -182,14 +286,14 @@ def _build_chart_data(
     ]
     product_labels = [metric.product for metric in visible_product_metrics]
 
-    loaded = _extract_row_value(raw_rows, ("груженые",))
-    empty = _extract_row_value(raw_rows, ("порожние",))
-    bad = _extract_row_value(raw_rows, ("негодные",))
-    total = _extract_row_value(raw_rows, ("парк всего", "вагоны всего"))
+    loaded = _extract_row_value(raw_rows, ("груженые",)) or _ai_value(ai_metrics, "wagon_park", "loaded")
+    empty = _extract_row_value(raw_rows, ("порожние",)) or _ai_value(ai_metrics, "wagon_park", "empty")
+    bad = _extract_row_value(raw_rows, ("негодные",)) or _ai_value(ai_metrics, "wagon_park", "bad_order")
+    total = _extract_row_value(raw_rows, ("парк всего", "вагоны всего")) or _ai_value(ai_metrics, "wagon_park", "total")
     other = None
     if total is not None:
         known = sum(value or 0 for value in (loaded, empty, bad))
-        other = max(total - known, 0)
+        other = _ai_value(ai_metrics, "wagon_park", "other") or max(total - known, 0)
     park_values = [loaded, empty, bad, other]
 
     reasons = Counter(
@@ -296,6 +400,17 @@ def get_dashboard_data(db: Session, package_id: int) -> dict:
         .where(ProductWagonMetric.package_id == package_id)
         .order_by(ProductWagonMetric.wagon_group, ProductWagonMetric.product)
     ).all()
+    ai_metrics = db.scalars(
+        select(AIExtractedMetric)
+        .where(AIExtractedMetric.package_id == package_id)
+        .order_by(AIExtractedMetric.metric_group, AIExtractedMetric.product, AIExtractedMetric.metric_key)
+    ).all()
+    ai_run = db.scalars(
+        select(AIExtractionRun)
+        .where(AIExtractionRun.package_id == package_id)
+        .order_by(AIExtractionRun.created_at.desc())
+    ).first()
+    product_metrics_view = _merge_ai_product_metrics(product_metrics, ai_metrics)
 
     source_counts: dict[str, int] = {}
     keyword_counts: dict[str, int] = {}
@@ -311,12 +426,13 @@ def get_dashboard_data(db: Session, package_id: int) -> dict:
         "completeness": _build_completeness(files),
         "sheets": sheets,
         "raw_rows": raw_rows,
-        "chain": _build_chain_view(chain_metric),
+        "chain": _build_chain_view(chain_metric, ai_metrics),
         "metric_sources": metric_sources,
-        "product_metrics": product_metrics,
-        "false_coverage_warnings": false_park_coverage_warnings(product_metrics),
+        "product_metrics": product_metrics_view,
+        "false_coverage_warnings": false_park_coverage_warnings(product_metrics_view),
         "management_insight": build_ai_or_rule_based_summary(db, package_id),
-        "charts": _build_chart_data(chain_metric, product_metrics, raw_rows, all_chain_metrics),
+        "ai_extraction": _ai_extraction_view(ai_run, len(ai_metrics)),
+        "charts": _build_chart_data(chain_metric, product_metrics_view, raw_rows, all_chain_metrics, ai_metrics),
         "source_counts": source_counts,
         "keyword_counts": dict(sorted(keyword_counts.items(), key=lambda item: item[1], reverse=True)),
     }

@@ -81,6 +81,31 @@ REQUIRED_SCHEMA: dict[str, set[str]] = {
         "main_limitation",
         "created_at",
     },
+    "ai_extraction_runs": {
+        "id",
+        "package_id",
+        "model",
+        "status",
+        "prompt_tokens",
+        "output_tokens",
+        "error_text",
+        "created_at",
+    },
+    "ai_extracted_metrics": {
+        "id",
+        "package_id",
+        "metric_group",
+        "metric_key",
+        "metric_value",
+        "unit",
+        "product",
+        "product_group",
+        "shift_type",
+        "confidence",
+        "source_rows_json",
+        "raw_json",
+        "created_at",
+    },
 }
 
 

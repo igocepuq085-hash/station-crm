@@ -215,6 +215,31 @@ body {
   grid-column: 1 / -1;
 }
 
+.ai-extraction-block {
+  border-left: 4px solid var(--accent-dark);
+}
+
+.ai-extraction-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.ai-extraction-grid div {
+  display: grid;
+  gap: 4px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfcfd;
+  padding: 12px;
+}
+
+.ai-extraction-grid span {
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
 .chart-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -487,6 +512,10 @@ body {
   }
 
   .insight-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ai-extraction-grid {
     grid-template-columns: 1fr;
   }
 }
